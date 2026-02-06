@@ -1,0 +1,6 @@
+participantId,accountNo,instrumentId,investorName,address,investorHash
+PARTICIPANT_01,ACC-H-1001,ISIN_TH_0001,Somchai S. (Local),Bangkok Thailand,A1B2C3D4E5F6
+PARTICIPANT_01,ACC-H-1002,ISIN_TH_0001,John Doe (Foreign),New York USA,B2C3D4E5F6G7
+PARTICIPANT_01,ACC-H-666,ISIN_TH_0001,Evil Corp (Sanctioned),Unknown,C3D4E5F6G7H8
+PARTICIPANT_01,ACC-H-007,ISIN_TH_0001,James Bond (Foreign),London UK,D4E5F6G7H8I9
+PARTICIPANT_01,ACC-H-001,ISIN_TH_0001,Poor Student (Local),Chiang Mai,E5F6G7H8I9J0

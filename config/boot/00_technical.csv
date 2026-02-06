@@ -1,0 +1,3 @@
+KEY,VALUE
+tech.persistence,technical_area.persistence.FileHandler
+tech.stub,technical_area.stub.TechnicalStub

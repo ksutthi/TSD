@@ -1,0 +1,16 @@
+### =================================================================================
+### 📅 CORPORATE EVENT LIFECYCLE TESTS
+### =================================================================================
+
+### 1. Announce New Dividend Event
+# Scenario: Board of Directors approves a payout for PTT.
+POST http://localhost:8080/api/event/announce
+Content-Type: application/json
+
+{
+  "eventType": "Cash_Dividend",
+  "securitySymbol": "PTT",
+  "bookClosingDate": "2026-02-03",
+  "rate": 2.25,
+  "currency": "THB"
+}

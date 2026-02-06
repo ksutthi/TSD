@@ -1,0 +1,11 @@
+KEY,VALUE
+# --- File References (Legacy) ---
+ref.tax,config/business/business_params.csv
+ref.sanctions,data/compliance/blacklist.csv
+output.ledger,outputs/bank_transfers.csv
+ref.fee,config/business/business_params.csv
+ref.aml,config/business/business_params.csv
+
+# --- Business Limits ---
+# Used by: CallIdentityMgmtCartridge
+AUTO_APPROVAL_LIMIT,50000000

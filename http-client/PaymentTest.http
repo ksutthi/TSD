@@ -1,0 +1,41 @@
+### 1. Confirm a Successful Payment
+# Pillar 3 (Idempotency) & Pillar 4 (Logging):
+# Simulates the bank notifying the Registrar of a successful transfer.
+POST http://localhost:8080/api/payments/confirm
+Content-Type: application/json
+
+{
+  "paymentId": 1,
+  "referenceNo": "BANK-REF-SUCCESS-001"
+}
+
+###
+
+### 2. Reject a Payment (Account Closed)
+# Pillar 17 (Registrar Isolation):
+# Simulates a failed transfer that needs the Registrar's attention.
+POST http://localhost:8080/api/payments/reject
+Content-Type: application/json
+
+{
+  "paymentId": 2,
+  "reason": "ACCOUNT_CLOSED"
+}
+
+###
+
+### 3. Check System Health
+# A quick check to ensure the Spring Boot server is responding.
+GET http://localhost:8080/actuator/health
+
+###
+
+### 4. Get James Bond's Statement (Investor View)
+# Standard API access for the individual investor statement.
+GET http://localhost:8080/api/investor/GIN-1000004/statement
+
+###
+
+### 5. God-View Access (Master Key Required)
+GET http://localhost:8080/api/admin/god-view/GIN-1000004
+X-Master-Key: TSD-SECRET-2026-GOD-VIEW

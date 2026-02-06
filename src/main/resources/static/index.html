@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TSD Security Control Center</title>
+    <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; padding: 40px; color: #1c1e21; }
+        .container { max-width: 1300px; margin: 0 auto; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+
+        h1 { color: #1a1a1a; text-align: center; margin-bottom: 10px; font-weight: 800; letter-spacing: -0.5px; }
+        p.subtitle { text-align: center; color: #65676b; margin-bottom: 40px; }
+
+        /* GRID LAYOUT FOR BUTTONS */
+        .control-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .section-title { grid-column: span 3; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: 700; margin-top: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+
+        button { padding: 18px; border: none; border-radius: 10px; cursor: pointer; text-align: left; transition: transform 0.1s, box-shadow 0.1s; position: relative; overflow: hidden; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        button:active { transform: translateY(0); }
+
+        button strong { display: block; font-size: 1.1em; margin-bottom: 4px; }
+        button small { display: block; opacity: 0.8; font-size: 0.85em; font-weight: normal; }
+
+        /* COLORS */
+        .btn-participant { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
+        .btn-registrar { background: linear-gradient(135deg, #27ae60, #219150); color: white; }
+        .btn-god { background: linear-gradient(135deg, #8e44ad, #732d91); color: white; grid-column: span 2; text-align: center; }
+        .btn-hacker { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; text-align: center; }
+
+        /* TABLE STYLES */
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 20px; border: 1px solid #e1e4e8; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 16px; text-align: left; border-bottom: 1px solid #e1e4e8; }
+        th { background-color: #f8f9fa; color: #444; font-weight: 700; font-size: 0.9em; text-transform: uppercase; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #f8faff; }
+
+        /* BADGES */
+        .badge { padding: 4px 10px; border-radius: 50px; font-size: 0.75em; font-weight: 700; display: inline-block; }
+        .badge-reg-1 { background: #e8f6f3; color: #0f7b6c; border: 1px solid #a2d9ce; }
+        .badge-reg-2 { background: #fef5e7; color: #b34500; border: 1px solid #f5cba7; }
+        .badge-part { background: #ebf5fb; color: #2980b9; }
+
+        /* LOG BOX */
+        #status { font-family: 'Consolas', monospace; font-size: 0.9em; padding: 15px; background: #2d3436; color: #00b894; border-radius: 8px; margin-bottom: 20px; min-height: 20px; }
+        .error-log { color: #ff7675 !important; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Security Control Center</h1>
+    <p class="subtitle">Row Level Security (RLS) Policy Verification Console</p>
+
+    <div id="status">> System Idle. Waiting for command...</div>
+
+    <div class="control-grid">
+        <div class="section-title">PARTICIPANT VIEW (Global Visibility of Own Assets)</div>
+        <button class="btn-participant" onclick="loadData('PARTICIPANT', '101')">
+            <strong>Participant 101</strong>
+            <small>Hedge Fund (Only Reg 1)</small>
+        </button>
+        <button class="btn-participant" onclick="loadData('PARTICIPANT', '201')">
+            <strong>Participant 201</strong>
+            <small>J.P. Morgan (Reg 1 & 2)</small>
+        </button>
+        <button class="btn-participant" onclick="loadData('PARTICIPANT', '202')">
+            <strong>Participant 202</strong>
+            <small>Goldman Sachs (Only Reg 1)</small>
+        </button>
+
+        <div class="section-title">REGISTRAR VIEW (Siloed Visibility of Local Assets)</div>
+        <button class="btn-registrar" onclick="loadData('REGISTRAR', '1')">
+            <strong>Registrar 1</strong>
+            <small>Main Registry (Users 101, 201, 202)</small>
+        </button>
+        <button class="btn-registrar" onclick="loadData('REGISTRAR', '2')">
+            <strong>Registrar 2</strong>
+            <small>Foreign Registry (Users 101, 201)</small>
+        </button>
+        <button style="visibility: hidden;"></button>
+
+        <div class="section-title">ADMINISTRATIVE & UNAUTHORIZED ACCESS</div>
+        <button class="btn-god" onclick="loadData('GOD', '')">
+            <strong>God View</strong>
+            <small>Super Admin (Sees Everything across All Registries)</small>
+        </button>
+        <button class="btn-hacker" onclick="loadData('HACKER', '')">
+            <strong>Hacker</strong>
+            <small>No Credentials</small>
+        </button>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th width="15%">Account Number</th>
+            <th width="20%">Account / Investor</th>
+            <th width="25%">Instrument</th>
+            <th width="15%">Registry</th>
+            <th width="15%">Quantity</th>
+            <th width="10%">Last Snapshot</th>
+        </tr>
+        </thead>
+        <tbody id="tableBody">
+        <tr><td colspan="6" style="text-align:center; color:#ccc; padding: 30px;">Select a scenario above to load data</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadData(role, id) {
+        const statusDiv = document.getElementById('status');
+        const tableBody = document.getElementById('tableBody');
+        statusDiv.className = '';
+
+        let headers = {};
+        let description = "";
+
+        if (role === 'PARTICIPANT') {
+            headers = { 'X-Participant-ID': id };
+            description = `Authenticating as <b>Participant ${id}</b>...`;
+        } else if (role === 'REGISTRAR') {
+            headers = { 'X-Registrar-ID': id };
+            description = `Authenticating as <b>Registrar ${id}</b>...`;
+        } else if (role === 'GOD') {
+            headers = { 'X-God-Mode': 'true' };
+            description = "Authenticating as <b>GOD MODE</b>...";
+        } else {
+            description = "Attempting unauthorized access (No Headers)...";
+        }
+
+        statusDiv.innerHTML = `> ${description}`;
+
+        try {
+            const response = await fetch('/api/gateway/my-portfolio', { method: 'GET', headers: headers });
+            const data = await response.json();
+
+            tableBody.innerHTML = '';
+
+            if (data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: #e74c3c; font-weight:bold; padding: 30px;">🚫 ACCESS DENIED / NO RECORDS FOUND</td></tr>';
+                statusDiv.innerHTML += " <span style='color:#e74c3c'>[BLOCKED]</span>";
+                return;
+            }
+
+            data.forEach(row => {
+                const regId = row.id.registrarId;
+                const regBadge = regId === 1 ? 'badge-reg-1' : 'badge-reg-2';
+                const bgStyle = regId === 2 ? 'background-color: #fffaf0;' : '';
+
+                const tr = document.createElement('tr');
+                tr.style = bgStyle;
+                tr.innerHTML = `
+                    <td style="font-family: monospace; font-weight:bold; color:#555;">${row.accountNumber}</td>
+                    <td>
+                        <span class="badge badge-part">User ${row.id.participantId}</span><br>
+                        <small style="font-weight:bold; color:#2c3e50;">${row.investorName}</small>
+                    </td>
+                    <td>
+                        <b>${row.id.instrumentId}</b><br>
+                        <small style="color:#777">${row.name}</small>
+                    </td>
+                    <td><span class="badge ${regBadge}">Registry ${regId}</span></td>
+                    <td style="font-family: monospace; font-size: 1.1em;">${row.quantity.toLocaleString()}</td>
+                    <td style="color:#888; font-size:0.85em;">${row.lastUpdated.replace('T', ' ')}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            statusDiv.innerHTML += ` <span style='color:#2ecc71'>[SUCCESS]</span> Loaded ${data.length} records.`;
+
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerHTML = `> Error connecting to server. Is the backend running?`;
+            statusDiv.className = 'error-log';
+        }
+    }
+</script>
+
+</body>
+</html>

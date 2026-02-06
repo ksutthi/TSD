@@ -1,0 +1,41 @@
+### =================================================================================
+### 🚀 EXECUTE DIVIDEND BATCH WORKFLOW (Happy Path)
+### =================================================================================
+### SCENARIO:
+### A High-Value (5M THB) Cash Dividend payment
+### for a Foreign Investor (Singapore)
+### sourced from CSD (Scripless).
+### =================================================================================
+
+POST http://localhost:8080/api/workflow/execute
+Content-Type: application/json
+
+{
+  "//_COMMENT_MODULE_J": "--- Event Configuration ---",
+  "Event_Type":     "Cash_Dividend",
+  "Market_Segment": "SET50",
+  "Issuer_Status":  "Active",
+  "Treasury_Held":  "5000",
+  "Currency":       "THB",
+
+  "//_COMMENT_MODULE_K": "--- Eligibility & Source ---",
+  "Source":         "CSD",
+  "File_Status":    "Ready",
+  "System_Mode":    "Online",
+  "ID_Type":        "Passport",
+  "Country_Code":   "SG",
+
+  "//_COMMENT_MODULE_L": "--- Election Management ---",
+  "Service_Status": "Active",
+  "eDividend_Status": "True",
+
+  "//_COMMENT_MODULE_M": "--- Calculation & Tax ---",
+  "Tax_Profile":    "Treaty_Country",
+  "All_Eligible_Accounts": "True",
+
+  "//_COMMENT_MODULE_N": "--- Settlement & Auth ---",
+  "Net_Amount":     "5000000",
+  "Payment_Mode":   "eDividend",
+  "Auth_Status":    "Approved",
+  "All_Paid_Accounts": "True"
+}

@@ -1,0 +1,6 @@
+KEY,VALUE
+data.triggers,inputs/test_triggers.csv
+data.ledger,data/ledger/ledger.csv
+data.events,data/master/event_master.csv
+data.accounts,data/registry/accounts.csv 
+data.holders,data/registry/holders.csv   

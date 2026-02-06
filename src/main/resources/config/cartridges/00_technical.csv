@@ -1,0 +1,8 @@
+KEY,VALUE
+# --- System Classes (Legacy) ---
+tech.persistence,technical_area.persistence.FileHandler
+tech.stub,technical_area.stub.TechnicalStub
+
+# --- Technical Parameters ---
+# Used by: ValidateSECLeadTimesCartridge
+SEC_SETTLEMENT_DAYS,3

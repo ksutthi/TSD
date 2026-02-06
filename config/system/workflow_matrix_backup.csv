@@ -1,0 +1,33 @@
+Module_ID,Module_Name,Slot_ID,Slot_Name,Step_ID,Cartridge_ID,Cartridge_Name,Strategy,Selector_Logic,Execution_Scope
+J,Corporate Event Management,J1,Ingest,1,J1-S1-C1,Validate_SEC_Lead_Times,Serial,Event_Type == 'Cash_Dividend',JOB
+J,Corporate Event Management,J2,Enrich,1,J2-S1-C1,Enrich_Market_Data,Parallel,true,JOB
+J,Corporate Event Management,J2,Enrich,1,J2-S1-C2,Enrich_FX_Rates,Parallel,true,JOB
+J,Corporate Event Management,J3,Validate,1,J3-S1-C1,Check_Treasury_Stock_Rules,Serial,Issuer_Status == 'Active',JOB
+J,Corporate Event Management,J4,Approve,1,J4-S1-C1,Compliance_Check_A,Consensus,true,JOB
+J,Corporate Event Management,J4,Approve,1,J4-S1-C2,Compliance_Check_B,Consensus,true,JOB
+J,Corporate Event Management,J5,Lifecycle,1,J5-S1-C1,Update_Event_Status,Serial,true,JOB
+J,Corporate Event Management,J6,Publish,1,J6-S1-C1,Publish_to_Portal,Serial,true,JOB
+K,Eligibility Determination,K1,Snapshot,1,K1-S1-C1,Take_Snapshot,Serial,true,JOB
+K,Eligibility Determination,K2,Capture,1,K2-S1-C1,Ingest_CSD_Scripless,Parallel,Source == 'CSD',ITEM
+K,Eligibility Determination,K2,Capture,1,K2-S1-C2,Ingest_Internal_Scrip,Parallel,Source == 'Registrar_DB',ITEM
+K,Eligibility Determination,K3,Filter,1,K3-S1-C1,Sanity_Check_Positions,Serial,true,ITEM
+K,Eligibility Determination,K4,Enrich,1,K4-S1-C1,Calc_Holding_Period,Serial,true,ITEM
+K,Eligibility Determination,K4,Enrich,2,K4-S1-C2,Classify_Tax_Domicile,Serial,Country_Code != 'TH',ITEM
+K,Eligibility Determination,K5,Approve,1,K5-S1-C1,Approve_Eligibility_List,Serial,true,ITEM
+K,Eligibility Determination,K6,Distribute,1,K6-S1-C1,Notify_Custodians,Serial,true,ITEM
+L,Position Aggregation,L1,Identify,1,L1-S1-C1,Merge_By_NationalID,Serial,true,ITEM
+L,Position Aggregation,L2,Sum,1,L2-S1-C1,Sum_Positions_By_Instrument,Serial,true,ITEM
+M,Entitlement Calculation,M1,Prepare,1,M1-S1-C1,Load_Tax_Tables,Serial,true,ITEM
+M,Entitlement Calculation,M2,Calculate,1,M2-S1-C1,Calc_Gross_Benefit,Serial,All_Eligible_Accounts == 'True',ITEM
+M,Entitlement Calculation,M3,Validate,1,M3-S1-C1,Cross_Check_Totals,Serial,true,ITEM
+M,Entitlement Calculation,M4,Adjust,1,M4-S1-C1,Apply_WHT_Standard,Serial,Tax_Profile == 'Standard_Individual',ITEM
+M,Entitlement Calculation,M5,Approve,1,M5-S1-C1,CFO_Signoff_Sim,Serial,true,JOB
+M,Entitlement Calculation,M6,Publish,1,M6-S1-C1,Gen_Payment_Slip,Serial,true,JOB
+N,Distribution & Settlement,N1,Prepare,1,N1-S1-C1,Check_Liquidity,Consensus,true,ITEM
+N,Distribution & Settlement,N1,Prepare,1,N1-S1-C2,Call_Identity_Mgmt,Consensus,Net_Amount > 10000000.0,ITEM
+N,Distribution & Settlement,N2,Instruct,1,N2-S1-C1,Gen_Media_Clearing_File,Serial,Payment_Mode == 'eDividend',ITEM
+N,Distribution & Settlement,N3,Execute,1,N3-S1-C1,Execute_Swift_Payment,Parallel,Payment_Mode == 'SWIFT',ITEM
+N,Distribution & Settlement,N3,Execute,1,N3-S1-C2,Execute_BahtNet_Payment,Parallel,Payment_Mode == 'BAHTNET',ITEM
+N,Distribution & Settlement,N4,Reconcile,1,N4-S1-C1,Bank_Ack_Listener,Serial,true,ITEM
+N,Distribution & Settlement,N5,Confirm,1,N5-S1-C1,Update_Wallet_Balance,Serial,true,ITEM
+N,Distribution & Settlement,N6,Report,1,N6-S1-C1,Gen_50Tawi_PDF,Serial,All_Paid_Accounts == 'True',ITEM

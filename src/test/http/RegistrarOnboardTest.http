@@ -1,0 +1,84 @@
+### =================================================================================
+### 🧪 REGISTRAR & ONBOARDING SMOKE TESTS
+### =================================================================================
+
+### 1. Check System Health
+# Pillar 4: Verify the Spring Boot server is up.
+GET http://localhost:8080/actuator/health
+
+###
+
+### 2. God-View Access (Check DB before we start)
+# Use this to peek at who exists (e.g. Investor ID 1).
+GET http://localhost:8080/api/admin/god-view/GIN-00000
+X-Master-Key: TSD-SECRET-2026-GOD-VIEW
+
+###
+
+### 3. LEVEL 3 ONBOARDING: Happy Path
+# Scenario: A brand new user walks in.
+# Expectation: Status 200 OK + "SUCCESS"
+POST http://localhost:8080/api/registrar/onboard
+Content-Type: application/json
+
+{
+  "firstName": "James",
+  "lastName": "Bond",
+  "dob": "1980-01-01",
+  "taxId": "TAX-999",
+  "idType": "PASSPORT",
+  "idValue": "UK-007-GOLD",
+  "countryCode": "GBR",
+  "participantId": 101,
+  "registrarId": 1
+}
+
+###
+
+### 4. LEVEL 3 ONBOARDING: The Compliance Trap
+# Scenario: "Jane" tries to register with James Bond's DOB but different Tax ID.
+# Expectation: Status 202 Accepted + "PENDING" (Sent to Queue)
+POST http://localhost:8080/api/registrar/onboard
+Content-Type: application/json
+
+{
+  "firstName": "Jane",
+  "lastName": "Bond",
+  "dob": "1980-01-01",
+  "taxId": "TAX-777",
+  "idType": "PASSPORT",
+  "idValue": "UK-999-JANE",
+  "countryCode": "GBR",
+  "participantId": 101,
+  "registrarId": 1
+}
+
+###
+
+### 5. LEVEL 3 ONBOARDING: The "Hard" Compliance Trap
+# Scenario: Identity Imposter? Same Name + DOB, but suspicious Tax ID.
+# Expectation: Status 202 Accepted + "PENDING"
+POST http://localhost:8080/api/registrar/onboard
+Content-Type: application/json
+
+{
+  "firstName": "James",
+  "lastName": "Bond",
+  "dob": "1980-01-01",
+  "taxId": "TAX-666",
+  "idType": "PASSPORT",
+  "idValue": "UK-666-FAKE",
+  "countryCode": "GBR",
+  "participantId": 101,
+  "registrarId": 1
+}
+
+###
+
+### 6. REGISTRAR OPS: Resolve as NEW
+POST http://localhost:8080/api/registrar/ops/resolve-new
+Content-Type: application/json
+
+{
+  "queueId": 0
+}
