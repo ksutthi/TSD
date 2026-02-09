@@ -2,8 +2,8 @@ package com.tsd.platform.engine.core
 
 import com.tsd.platform.engine.loader.WorkflowLoader // ✅ Correct Loader
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.model.ExchangePacket
-import com.tsd.platform.model.MatrixRule
+import com.tsd.platform.model.registry.ExchangePacket
+import com.tsd.platform.model.registry.MatrixRule
 import com.tsd.platform.persistence.AuditLog
 import com.tsd.platform.persistence.AuditRepository
 import com.tsd.platform.spi.KernelContext
@@ -12,7 +12,6 @@ import com.tsd.platform.spi.Cartridge // ✅ Needed for Cartridge type
 import kotlinx.coroutines.*
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
-import java.util.concurrent.ConcurrentHashMap
 
 @Service
 @Primary

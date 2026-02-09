@@ -1,6 +1,6 @@
 package com.tsd.platform.engine.core
 
-import com.tsd.platform.model.ExchangePacket
+import com.tsd.platform.model.registry.ExchangePacket
 import org.springframework.context.expression.MapAccessor
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext

@@ -2,7 +2,7 @@ package com.tsd.platform.engine.loader
 
 import com.tsd.platform.config.ConfigMatrix
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.model.MatrixRule
+import com.tsd.platform.model.registry.MatrixRule
 import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.KernelContext
 import jakarta.annotation.PostConstruct

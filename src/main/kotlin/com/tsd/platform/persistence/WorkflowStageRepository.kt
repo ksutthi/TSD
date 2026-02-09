@@ -1,6 +1,6 @@
 package com.tsd.platform.persistence
 
-import com.tsd.platform.model.WorkflowStage
+import com.tsd.platform.model.registry.WorkflowStage
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository

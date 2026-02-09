@@ -66,3 +66,12 @@ tasks.named<ProcessResources>("processResources") {
     // ☠️ FORCE update: Always treat resources as "out of date"
     outputs.upToDateWhen { false }
 }
+
+tasks.withType<JavaExec> {
+    // Force the app to run with UTF-8 encoding
+    systemProperty("file.encoding", "UTF-8")
+    // Also force the console to output standard streams in UTF-8
+    standardOutput = System.out
+    errorOutput = System.err
+    jvmArgs("-Dfile.encoding=UTF-8")
+}

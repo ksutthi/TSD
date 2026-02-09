@@ -1,7 +1,6 @@
 package com.tsd.platform.spi
 
-import com.tsd.platform.model.ExchangePacket
-import com.tsd.platform.spi.KernelContext
+import com.tsd.platform.model.registry.ExchangePacket
 
 interface Cartridge {
     val id: String

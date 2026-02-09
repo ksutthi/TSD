@@ -1,7 +1,7 @@
 package com.tsd.app
 
-import com.tsd.app.functional_area.account.service.HoldersProcessor
-import com.tsd.app.functional_area.authorization.service.RegistryIdentityManager
+import com.tsd.app.account.service.HoldersProcessor
+import com.tsd.app.authorization.service.RegistryIdentityManager
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
