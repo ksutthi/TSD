@@ -17,7 +17,6 @@ class WorkflowLoader(
     private val configMatrix: ConfigMatrix
 ) {
     // Standard Paths
-// ✅ NEW: Loads ONLY the correct file
     private val WORKFLOW_PATH = "classpath*:config/workflows/workflow_matrix.csv"
     val rules = mutableListOf<MatrixRule>()
 
@@ -76,6 +75,11 @@ class WorkflowLoader(
                                 val modId = parts[0]
                                 val beanName = parts[6]
 
+                                // 🟢 CRITICAL FIX: Define Job Scopes properly
+                                // J = Setup, N = Bulk Distribution, Z = Reporting
+                                val isJobScope = modId == "J" || modId == "N" || modId == "Z"
+                                val determinedScope = if (isJobScope) "JOB" else "ITEM"
+
                                 val rule = MatrixRule(
                                     moduleId = modId,
                                     moduleName = parts[1],
@@ -86,7 +90,7 @@ class WorkflowLoader(
                                     cartridgeName = beanName,
                                     strategy = parts[7],
                                     selector = parts[8],
-                                    scope = if (modId == "J") "JOB" else "ITEM"
+                                    scope = determinedScope
                                 )
                                 rules.add(rule)
                             }
@@ -120,7 +124,7 @@ class WorkflowLoader(
                     slotRules.forEach { rule ->
                         val stepInfo = "[S${rule.stepId}]"
                         val cartridge = rule.cartridgeName
-                        val strat = if (rule.strategy == "PARALLEL") "⚡ PARALLEL" else "SERIAL"
+                        val strat = rule.strategy // "PARALLEL" or "SERIAL" comes from CSV
 
                         // Level 3: Step
                         println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)

@@ -2,9 +2,9 @@ package com.tsd.app.distribution.cartridge
 
 import com.tsd.app.market.cartridge.FxRateCartridge
 import com.tsd.app.calculation.cartridge.FeeCalculatorCartridge
-import com.tsd.app.audit.service.AuditLedger // 🟢 IMPORT THE AUDITOR
+import com.tsd.app.audit.service.AuditLedger
+import com.tsd.platform.engine.state.JobAccumulator // 🟢 IMPORT BEAN
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.engine.util.SecretContext
 import com.tsd.platform.event.PaymentCompletedEvent
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.Cartridge
@@ -19,77 +19,66 @@ class Gen50TawiPdfCartridge(
     private val publisher: ApplicationEventPublisher,
     private val fxRacer: FxRateCartridge,
     private val feeShopper: FeeCalculatorCartridge,
-    private val auditor: AuditLedger // 🟢 1. INJECT AUDITOR
+    private val auditor: AuditLedger,
+    private val memory: JobAccumulator // 🟢 INJECT BEAN
 ) : Cartridge {
 
     override val id = "Gen_50Tawi_PDF"
-    override val version = "3.0" // 🟢 UPGRADED TO AUDIT VERSION
+    override val version = "5.0" // Spring Bean Version
     override val priority = 50
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        val prefix = context.getObject<String>("STEP_PREFIX") ?: "[N3]"
+        val prefix = "[N3-SPRING]"
 
-        // 🏎️ Strategy 1: Racing
-        println(EngineAnsi.CYAN + "      🏁 $prefix [RACE] Getting FX Rate..." + EngineAnsi.RESET)
+        // 1. Strategies (Race & Scatter-Gather)
+        println(EngineAnsi.CYAN + "      🏁 $prefix [RACE] Getting FX Rate for Batch..." + EngineAnsi.RESET)
         fxRacer.execute(packet, context)
 
-        // 🛍️ Strategy 2: Scatter-Gather
-        println(EngineAnsi.CYAN + "      🛍️ $prefix [SCATTER-GATHER] Calculating Best Fee..." + EngineAnsi.RESET)
+        println(EngineAnsi.CYAN + "      🛍️ $prefix [SCATTER-GATHER] Calculating Fees for Batch..." + EngineAnsi.RESET)
         feeShopper.execute(packet, context)
 
-        // 🔐 Strategy 3: Persistence & Transactionality
-        val accountIdStr = context.getString("Account_ID")
-        val accountId = accountIdStr?.toLongOrNull()
-        var amount = BigDecimal.ZERO
+        // 2. Fetch from Spring Memory
+        println(EngineAnsi.CYAN + "      🏗️ $prefix Starting Bulk PDF Generation from Spring Memory..." + EngineAnsi.RESET)
 
-        if (accountId != null) {
-            val secretMoney = SecretContext.withdraw(accountId)
+        // 🟢 READ (Pass Job ID - The Accumulator handles the Session fallback automatically)
+        val allPayments = memory.getAllPayouts(context.jobId)
 
-            if (secretMoney != null && secretMoney > BigDecimal.ZERO) {
-                amount = secretMoney
-
-                // 🟢 2. AUDIT: Record that we are attempting to pay
-                auditor.recordAttempt(amount)
-
-                try {
-                    generatePdfAndNotify(prefix, accountId, amount)
-
-                    // 🟢 3. AUDIT: Record Success
-                    auditor.recordSuccess(amount)
-
-                } catch (e: Exception) {
-                    println(EngineAnsi.YELLOW + "      ↩️ $prefix Transaction Failed! Rolling back..." + EngineAnsi.RESET)
-
-                    // ⚖️ Rollback
-                    SecretContext.deposit(accountId, amount)
-
-                    // 🟢 4. AUDIT: Record Failure
-                    auditor.recordFailure()
-                    throw e
-                }
-            } else {
-                println(EngineAnsi.RED + "      ⛔ $prefix Skipped: Vault is empty." + EngineAnsi.RESET)
-            }
+        if (allPayments.isEmpty()) {
+            println(EngineAnsi.YELLOW + "      ⚠️ No pending payments found in Spring Memory." + EngineAnsi.RESET)
+            return
         }
+
+        println(EngineAnsi.CYAN + "      📚 Found ${allPayments.size} pending payments." + EngineAnsi.RESET)
+
+        // 3. Process Loop
+        allPayments.forEach { (accountId, amount) ->
+            processSingleAccount(prefix, accountId, amount, context)
+        }
+
+        println(EngineAnsi.GREEN + "      ✅ $prefix Bulk Processing Completed." + EngineAnsi.RESET)
     }
 
-    private fun generatePdfAndNotify(prefix: String, accountId: Long, amount: BigDecimal) {
-        println(EngineAnsi.CYAN + "      📄 $prefix Generating Tax Certificate (50 Tawi)..." + EngineAnsi.RESET)
+    private fun processSingleAccount(prefix: String, accountId: Long, amount: BigDecimal, context: KernelContext) {
+        auditor.recordAttempt(amount)
 
-        // 🟢 DISABLE SABOTAGE FOR THE GOLDEN RUN
-        val sabotage = false
-        if (sabotage) {
-            println(EngineAnsi.RED + "      🔥 $prefix CRITICAL ERROR: Printer caught fire!" + EngineAnsi.RESET)
-            throw RuntimeException("Printer Fire")
+        try {
+            // Generate PDF (Simulated)
+            val filename = "50Tawi_${accountId}_${UUID.randomUUID().toString().substring(0,8)}.pdf"
+            println("         📄 Generated $filename for Account $accountId ($amount THB)")
+
+            // Broadcast Event
+            publisher.publishEvent(PaymentCompletedEvent(this, accountId, amount))
+
+            // 🟢 SUCCESS: Remove from Spring Memory (Pass Job ID)
+            memory.removePayout(context.jobId, accountId)
+
+            auditor.recordSuccess(amount)
+
+        } catch (e: Exception) {
+            println(EngineAnsi.RED + "         ❌ $prefix Failed to process Account $accountId" + EngineAnsi.RESET)
+            auditor.recordFailure()
+            // We do NOT remove it from memory, allowing for retry (it stays pending)
         }
-
-        val filename = "50Tawi_${UUID.randomUUID()}.pdf"
-        println(EngineAnsi.GREEN + "      ✅ $prefix PDF Generated: $filename (Net: $amount THB)" + EngineAnsi.RESET)
-        println(EngineAnsi.GREEN + "      📤 $prefix Sent to Printer Queue." + EngineAnsi.RESET)
-
-        // 📢 Strategy 4: Broadcast
-        println(EngineAnsi.CYAN + "      👉 $prefix Publishing Completion Event..." + EngineAnsi.RESET)
-        publisher.publishEvent(PaymentCompletedEvent(this, accountId, amount))
     }
 
     override fun initialize(context: KernelContext) {
