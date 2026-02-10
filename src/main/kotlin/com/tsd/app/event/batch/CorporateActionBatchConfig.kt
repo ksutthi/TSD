@@ -31,6 +31,7 @@ import org.springframework.transaction.PlatformTransactionManager
 import java.text.DecimalFormat
 import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 @Configuration
 @EnableBatchProcessing
@@ -46,6 +47,9 @@ class CorporateActionBatchConfig(
     private val logger = LoggerFactory.getLogger(CorporateActionBatchConfig::class.java)
     private val moneyFmt = DecimalFormat("#,##0.00")
 
+    // 🟢 NEW: Global Shared State (The "Brain" that survives across steps)
+    private val globalJobState = ConcurrentHashMap<String, Any>()
+
     private val cartridgeMap = cartridges.associateBy { it.id }.toMutableMap().apply {
         this["Flag_High_Value_Auth"] = this["Call_Identity_Mgmt"] ?: this["Flag_High_Value_Auth"] ?: return@apply
         this["Apply_WHT_Standard"] = this["Tax_Engine"] ?: return@apply
@@ -59,7 +63,6 @@ class CorporateActionBatchConfig(
         val builder = JobBuilder("CorporateActionJob", jobRepository)
         val plan = configMatrix.getExecutionPlan()
 
-        // 🟢 Added Listener to print "Job Finished"
         var jobFlow = builder
             .listener(JobCompletionNotificationListener())
             .start(startStep())
@@ -76,9 +79,11 @@ class CorporateActionBatchConfig(
     fun startStep(): Step {
         return StepBuilder("Step_Start", jobRepository)
             .tasklet({ _, _ ->
-                println("\n" + EngineAnsi.BOLD_WHITE + "============================================================" + EngineAnsi.RESET)
-                println(EngineAnsi.BOLD_GREEN + "🚀 STARTING BATCH JOB: Corporate Action Distribution" + EngineAnsi.RESET)
-                println(EngineAnsi.BOLD_WHITE + "============================================================" + EngineAnsi.RESET)
+                println("\n============================================================")
+                println(" STARTING BATCH JOB: Corporate Action Distribution")
+                println("============================================================")
+                // Clear state at start of new job
+                globalJobState.clear()
                 null
             }, transactionManager)
             .build()
@@ -89,7 +94,7 @@ class CorporateActionBatchConfig(
             .chunk<AccountBalance, AccountBalance>(10, transactionManager)
             .reader(accountReader())
             .writer(blockWriter(block))
-            .listener(BlockListener(block)) // Prints the Module Headers
+            .listener(BlockListener(block))
             .faultTolerant()
             .skip(Exception::class.java)
             .noSkip(JobSuspensionException::class.java)
@@ -118,40 +123,26 @@ class CorporateActionBatchConfig(
         }
     }
 
+    // ==================================================================================
+    // 🚀 THE "BIG 5" EXECUTION ENGINE (Fixed Data Persistence)
+    // ==================================================================================
     private fun executeBlockLogic(account: AccountBalance?, block: ExecutionBlock) {
         val contextData = mutableMapOf<String, Any>()
 
-        // 1. Setup the Rate
-        val rate = java.math.BigDecimal("4.00")
-        contextData["Rate"] = rate
-        contextData["rate"] = rate
+        // 1. 🟢 LOAD GLOBAL STATE (Inject "Rate" from previous steps)
+        contextData.putAll(globalJobState)
 
+        // 2. Setup Account Context
         if (account != null) {
-            // 🟢 FRESH ACCOUNT: Reload from DB to ensure we have the latest numbers
             val freshAccount = accountRepo.findById(account.accountId).orElse(account)
-
             contextData["Account_ID"] = freshAccount.accountId
             contextData["Tax_Profile"] = freshAccount.taxProfile
             contextData["Country_Code"] = freshAccount.countryCode
-
-            val balance = freshAccount.shareBalance
-
-            // 🟢 CRITICAL MAPPING:
-            // We give it BOTH names so every cartridge is happy.
-            contextData["Share_Balance"] = balance  // For Ingest
-            contextData["Balance"] = balance        // For Sanity Check (Fixes "Zero Balance")
-
-            // 🟢 LOGIC FIX: Net vs Gross
-            val gross = balance.multiply(rate)
-            val taxRate = java.math.BigDecimal("0.10") // 10% Tax
-            val estimatedTax = gross.multiply(taxRate)
-            val net = gross.subtract(estimatedTax)
-
-            contextData["Gross_Amount"] = gross
-            contextData["GROSS_AMOUNT"] = gross
-            contextData["Net_Amount"] = net  // Now logically correct (Gross - Tax)
+            contextData["Balance"] = freshAccount.shareBalance
+            contextData["Share_Balance"] = freshAccount.shareBalance
         }
 
+        // 3. Prepare Context
         val context = KernelContext(jobId = "BATCH-" + UUID.randomUUID().toString().substring(0, 8))
         contextData.forEach { (k, v) -> context.set(k, v) }
 
@@ -162,113 +153,169 @@ class CorporateActionBatchConfig(
 
         // Header Printing
         if (account != null) {
-            println(EngineAnsi.CYAN + "👤 [Account ${account.accountId}]" + EngineAnsi.RESET)
+            println(EngineAnsi.CYAN + " [Account ${account.accountId}]" + EngineAnsi.RESET)
         } else {
-            println(EngineAnsi.CYAN + "⚙️ [JOB LEVEL]" + EngineAnsi.RESET)
+            println(EngineAnsi.CYAN + " [JOB LEVEL]" + EngineAnsi.RESET)
         }
 
-        // Rule Execution Loop
-        for (rule in block.rules) {
+        // 4. EXECUTE RULES
+        val steps = block.rules.groupBy { it.stepId }
+
+        steps.forEach { (_, rulesInStep) ->
+            val strategy = rulesInStep.first().strategy.uppercase()
             try {
-                var cartridge = cartridgeMap[rule.cartridgeId]
-                if (cartridge == null) cartridge = cartridgeMap[rule.cartridgeName]
-                if (cartridge == null) cartridge = stubCartridge
-
-                if (cartridge != null) {
-                    // 🟢 UPDATE: Standardized numbering [Slot-Step] e.g. [K1-S1]
-                    val stepCode = "[${rule.slotId}-S${rule.stepId}]"
-                    // 👇 ADD THIS SINGLE LINE HERE 👇
-                    context.set("STEP_PREFIX", stepCode)
-                    // 👆 THIS PASSES THE ID TO THE CARTRIDGE 👆
-                    val structInfo = EngineAnsi.BLUE + stepCode.padEnd(8) + EngineAnsi.RESET
-                    val nameInfo = EngineAnsi.YELLOW + rule.cartridgeName + EngineAnsi.RESET
-                    val indent = "    "
-
-                    // 🟢 UPDATE: Detective Debugging to find the Zero Balance cause
-                    if (rule.cartridgeName == "Sanity_Check_Positions") {
-                        val b = contextData["Balance"]
-                    }
-
-                    print("$indent$structInfo $nameInfo >> ")
-
-                    cartridge.execute(packet, context)
-                } else {
-                    println(EngineAnsi.RED + "⚠️ MISSING" + EngineAnsi.RESET)
+                when (strategy) {
+                    "SERIAL"      -> executeSerial(rulesInStep, packet, context)
+                    "PARALLEL"    -> executeParallel(rulesInStep, packet, context)
+                    "CONSENSUS"   -> executeConsensus(rulesInStep, packet, context)
+                    "FIRST_MATCH" -> executeFirstMatch(rulesInStep, packet, context)
+                    "REMOTE"      -> executeRemote(rulesInStep, packet, context)
+                    else          -> executeSerial(rulesInStep, packet, context)
                 }
-
-            } catch (e: JobSuspensionException) {
-                println("")
-                println("    " + EngineAnsi.RED + "    🛑 SUSPENDED: ${formatSuspensionMessage(e.message)}" + EngineAnsi.RESET)
-                saveSuspension(account?.accountId ?: 0L, rule, e, contextData)
-                return
-
             } catch (e: Exception) {
-                println("    " + EngineAnsi.RED + "    ⚠️ SKIP: ${e.message}" + EngineAnsi.RESET)
+                println(EngineAnsi.RED + "    CRITICAL FAILURE in [$strategy]: ${e.message}" + EngineAnsi.RESET)
                 throw e
             }
         }
-    }
 
-    private fun formatSuspensionMessage(msg: String?): String {
-        if (msg == null) return "Unknown Error"
-        return try {
-            val regex = "(\\d+\\.\\d+E\\d+|\\d+\\.\\d+)".toRegex()
-            msg.replace(regex) { match ->
-                try {
-                    val num = match.value.toDouble()
-                    moneyFmt.format(num)
-                } catch (e: Exception) {
-                    match.value
+// 5. 🟢 SAVE GLOBAL STATE (The "X-Ray" Fix)
+        if (block.scope.equals("JOB", ignoreCase = true)) {
+            try {
+                println(EngineAnsi.MAGENTA + "    🕵️ [X-RAY] Peeking inside KernelContext..." + EngineAnsi.RESET)
+
+                // 1. REFLECTION: Unlock the private 'memory' map
+                val field = context.javaClass.getDeclaredField("memory")
+                field.isAccessible = true
+
+                @Suppress("UNCHECKED_CAST")
+                val secretMap = field.get(context) as Map<String, Any>
+
+                // 2. LOGGING: Print exactly what we found
+                println(EngineAnsi.MAGENTA + "    🔑 KEYS FOUND: " + secretMap.keys + EngineAnsi.RESET)
+
+                // 3. PERSISTENCE: Save EVERYTHING found (No guessing!)
+                secretMap.forEach { (key, value) ->
+                    globalJobState[key] = value
+
+                    // 4. INTELLIGENT ALIASING
+                    // If the key looks like a rate (e.g. "Dividend_Rate"),
+                    // ALSO save it as "Rate" so the calculator finds it.
+                    if (key.contains("Rate", ignoreCase = true) || key.contains("Dividend", ignoreCase = true)) {
+                        globalJobState["Rate"] = value
+                        println(EngineAnsi.YELLOW + "    💾 ALIAS CREATED: Rate = $value (from $key)" + EngineAnsi.RESET)
+                    } else {
+                        println(EngineAnsi.YELLOW + "    💾 PERSISTED GLOBAL: $key = $value" + EngineAnsi.RESET)
+                    }
                 }
+            } catch (e: Exception) {
+                println(EngineAnsi.RED + "    X-RAY FAILED: ${e.message}" + EngineAnsi.RESET)
             }
-        } catch (e: Exception) {
-            msg
         }
     }
 
-    private fun saveSuspension(accountId: Long, rule: MatrixRule, e: JobSuspensionException, data: Map<String, Any>) {
-        try {
-            if (!suspensionRepo.existsByAccountIdAndCartridgeName(accountId, rule.cartridgeName)) {
-                val action = SuspendedAction(
-                    accountId = accountId,
-                    cartridgeName = rule.cartridgeName,
-                    suspenseCode = e.suspenseCode,
-                    reason = e.reason,
-                    status = "PENDING",
-                    resolutionType = "RETRY",
-                    contextData = data
-                )
-                suspensionRepo.save(action)
-                println("      " + EngineAnsi.MAGENTA + "📥 TICKET CREATED [ID: $accountId]" + EngineAnsi.RESET)
+    // --- STRATEGIES (Unchanged) ---
+    private fun executeSerial(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
+        for (rule in rules) executeRule(rule, packet, context, "")
+    }
+
+    private fun executeParallel(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
+        if (rules.isEmpty()) return
+        println(EngineAnsi.MAGENTA + "    [PARALLEL] Spawning ${rules.size} threads..." + EngineAnsi.RESET)
+        rules.parallelStream().forEach { rule -> executeRule(rule, packet, context, "[PARALLEL]") }
+    }
+
+    private fun executeConsensus(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
+        if (rules.isEmpty()) return
+        println(EngineAnsi.YELLOW + "    [CONSENSUS] Requesting ${rules.size} votes..." + EngineAnsi.RESET)
+        rules.forEach { rule -> executeRule(rule, packet, context, "[CONSENSUS]") }
+    }
+
+    private fun executeFirstMatch(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
+        if (rules.isEmpty()) return
+        println(EngineAnsi.GREEN + "    [FIRST_MATCH] Hunting for a winner..." + EngineAnsi.RESET)
+        var winnerFound = false
+        for ((index, rule) in rules.withIndex()) {
+            try {
+                executeRule(rule, packet, context, "[FIRST_MATCH]")
+                println(EngineAnsi.GREEN + "        WINNER FOUND! Skipping remaining ${rules.size - (index + 1)} rules." + EngineAnsi.RESET)
+                winnerFound = true
+                break
+            } catch (e: Exception) {
+                println(EngineAnsi.YELLOW + "        Rule failed (${e.message}). Trying next candidate..." + EngineAnsi.RESET)
             }
-        } catch (ex: Exception) {
-            println("      ⚠️ Failed to save suspension: ${ex.message}")
+        }
+        if (!winnerFound) throw RuntimeException("All ${rules.size} candidates in FIRST_MATCH failed.")
+    }
+
+    private fun executeRemote(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
+        if (rules.isEmpty()) return
+        println(EngineAnsi.BLUE + "    [REMOTE] Initializing Uplink..." + EngineAnsi.RESET)
+        rules.forEach { rule ->
+            val startTime = System.currentTimeMillis()
+            executeRule(rule, packet, context, "[REMOTE]")
+            val duration = System.currentTimeMillis() - startTime
+            println(EngineAnsi.BLUE + "        Latency: ${duration}ms" + EngineAnsi.RESET)
+        }
+    }
+
+    private fun executeRule(rule: MatrixRule, packet: ExchangePacket, context: KernelContext, tag: String) {
+        var cartridge = cartridgeMap[rule.cartridgeId]
+        if (cartridge == null) cartridge = cartridgeMap[rule.cartridgeName]
+        if (cartridge == null) cartridge = stubCartridge
+
+        if (cartridge != null) {
+            val stepCode = "[${rule.slotId}-S${rule.stepId}]"
+            context.set("STEP_PREFIX", stepCode)
+
+            synchronized(System.out) {
+                val safeTag = if (tag.isNotEmpty()) tag.padEnd(12) else "            "
+                val structInfo = EngineAnsi.BLUE + stepCode.padEnd(8) + EngineAnsi.RESET
+                val nameInfo = EngineAnsi.YELLOW + rule.cartridgeName + EngineAnsi.RESET
+                println("    $structInfo $safeTag $nameInfo ... " + EngineAnsi.CYAN + "[STARTED]" + EngineAnsi.RESET)
+            }
+
+            try {
+                cartridge.execute(packet, context)
+                synchronized(System.out) {
+                    val safeTag = if (tag.isNotEmpty()) tag.padEnd(12) else "            "
+                    val structInfo = EngineAnsi.BLUE + stepCode.padEnd(8) + EngineAnsi.RESET
+                    println("    $structInfo $safeTag " + EngineAnsi.GREEN + "[COMPLETED]" + EngineAnsi.RESET)
+                }
+                context.set("SUCCESS_FLAG", true)
+            } catch (e: Exception) {
+                synchronized(System.out) {
+                    val safeTag = if (tag.isNotEmpty()) tag.padEnd(12) else "            "
+                    val structInfo = EngineAnsi.BLUE + stepCode.padEnd(8) + EngineAnsi.RESET
+                    println("    $structInfo $safeTag " + EngineAnsi.RED + "[FAILED]: ${e.message}" + EngineAnsi.RESET)
+                }
+                throw e
+            }
+        } else {
+            synchronized(System.out) {
+                println(EngineAnsi.RED + "MISSING CARTRIDGE: ${rule.cartridgeName}" + EngineAnsi.RESET)
+            }
+            throw RuntimeException("Cartridge ${rule.cartridgeName} not found")
         }
     }
 
     class JobCompletionNotificationListener : JobExecutionListener {
         override fun afterJob(jobExecution: JobExecution) {
             if (jobExecution.status == BatchStatus.COMPLETED) {
-                println("\n" + EngineAnsi.BOLD_WHITE + "============================================================" + EngineAnsi.RESET)
-                println(EngineAnsi.BOLD_GREEN + "✅ BATCH JOB COMPLETED SUCCESSFULLY" + EngineAnsi.RESET)
-                println(EngineAnsi.BOLD_WHITE + "============================================================" + EngineAnsi.RESET)
+                println("\n============================================================")
+                println(" BATCH JOB COMPLETED SUCCESSFULLY")
+                println("============================================================")
             } else {
-                println(EngineAnsi.BOLD_RED + "❌ BATCH JOB FAILED WITH STATUS: ${jobExecution.status}" + EngineAnsi.RESET)
+                println(" BATCH JOB FAILED WITH STATUS: ${jobExecution.status}")
             }
         }
     }
 
-    // 🟢 Replace just this class at the bottom of the file
     class BlockListener(private val block: ExecutionBlock) : org.springframework.batch.core.StepExecutionListener {
         override fun beforeStep(stepExecution: org.springframework.batch.core.StepExecution) {
-            // 1. Extract the human-readable name from the first rule in this block
             val moduleName = block.rules.firstOrNull()?.moduleName ?: "Unknown Module"
-
-            println(EngineAnsi.RESET + "\n" + EngineAnsi.BOLD_WHITE + "------------------------------------------------------------" + EngineAnsi.RESET)
-            // 2. Print it here: [K] Eligibility Determination
-            println(EngineAnsi.BOLD_CYAN + "📦 MODULE [${block.moduleId}] $moduleName " + EngineAnsi.RESET + EngineAnsi.WHITE + "| Rules: ${block.rules.size} | Scope: ${block.scope}" + EngineAnsi.RESET)
+            println(EngineAnsi.RESET + "\n------------------------------------------------------------")
+            println(EngineAnsi.BOLD_CYAN + " MODULE [${block.moduleId}] $moduleName " + EngineAnsi.RESET + EngineAnsi.WHITE + "| Rules: ${block.rules.size} | Scope: ${block.scope}" + EngineAnsi.RESET)
             println(EngineAnsi.BOLD_WHITE + "------------------------------------------------------------" + EngineAnsi.RESET)
         }
     }
 }
-

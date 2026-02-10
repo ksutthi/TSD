@@ -17,8 +17,8 @@ class WorkflowLoader(
     private val configMatrix: ConfigMatrix
 ) {
     // Standard Paths
-    private val WORKFLOW_PATH = "classpath*:config/workflows/*.csv"
-
+// ✅ NEW: Loads ONLY the correct file
+    private val WORKFLOW_PATH = "classpath*:config/workflows/workflow_matrix.csv"
     val rules = mutableListOf<MatrixRule>()
 
     @PostConstruct

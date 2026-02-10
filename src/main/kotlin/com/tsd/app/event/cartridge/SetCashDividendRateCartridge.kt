@@ -24,8 +24,12 @@ class SetCashDividendRateCartridge : Cartridge {
         // Let's use a DIFFERENT rate to prove M1 updates automatically!
         val approvedRate = 4.00
 
-        // WRITE to packet (So M1 can read it later)
-        packet.data["Dividend_Rate"] = approvedRate
+        // ❌ OLD: packet.data["Dividend_Rate"] = approvedRate (Engine can't see this!)
+
+        // ✅ NEW: Write to Context (So the Engine can persist it!)
+        // We save it as "Rate" directly so the Calculator finds it easily.
+        context.set("Rate", approvedRate)
+        context.set("Dividend_Rate", approvedRate) // Save alias just in case
 
         // 🟢 2. ALIGNMENT FIX: 6 Spaces outer + 6 Spaces inner (Matches J1)
         println("      " + EngineAnsi.GREEN + "    ✅ $prefix Rate Set: $approvedRate THB per share" + EngineAnsi.RESET)

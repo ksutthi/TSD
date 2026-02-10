@@ -5,26 +5,36 @@ import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.KernelContext
 import com.tsd.platform.spi.Cartridge
 import org.springframework.stereotype.Component
+import com.tsd.platform.engine.util.EngineAnsi
 
-@Component
+@Component("Calc_Gross_Benefit")
 class CalcGrossBenefitCartridge(
-    private val dividendCalculation: DividendCalculation // 💉 Inject the Logic
+    private val dividendCalculation: DividendCalculation
 ) : Cartridge {
     override val id = "Calc_Gross_Benefit"
-    override val version = "1.0"
+    override val version = "3.0" // 🟢 Bump to 3.0 (The "Shotgun" Release)
     override val priority = 2
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        // 1. Get Raw Data
-        val qty = dividendCalculation.safeBigDecimal(packet.data["Share_Balance"]) // 👈 Match Batch Config
-        val rate = dividendCalculation.safeBigDecimal(packet.data["Rate"])
+        val qty = context.getAmount("Share_Balance")
+        val rate = context.getAmount("Rate")
 
-        // 2. Use Service for Math
         val gross = dividendCalculation.calculateGross(qty, rate)
 
-        // 3. Save Result
+        // 🟢 FIX 1: Save to CONTEXT (Modern way)
+        context.set("Gross_Amount", gross)
+        context.set("Net_Amount", gross)
+
+        // 🟢 FIX 2: Save to PACKET (Legacy way - for the Tax Engine)
         packet.data["Gross_Amount"] = gross
-        println("      🧮 [M2] Gross: $qty x $rate = $gross")
+        packet.data["Net_Amount"] = gross
+
+        // Debug Log
+        println(EngineAnsi.MAGENTA + "==================================================" + EngineAnsi.RESET)
+        println(EngineAnsi.MAGENTA + " 💰 [v3.0] SAVED EVERYWHERE: $gross" + EngineAnsi.RESET)
+        println(EngineAnsi.MAGENTA + "    - Context: ✅" + EngineAnsi.RESET)
+        println(EngineAnsi.MAGENTA + "    - Packet:  ✅" + EngineAnsi.RESET)
+        println(EngineAnsi.MAGENTA + "==================================================" + EngineAnsi.RESET)
     }
 
     override fun initialize(context: KernelContext) {}

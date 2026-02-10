@@ -16,7 +16,7 @@ K,Eligibility Determination,K4,Enrich,2,K4-S1-C2,Classify_Tax_Domicile,Serial,Co
 K,Eligibility Determination,K5,Approve,1,K5-S1-C1,Approve_Eligibility_List,Consensus,true,ITEM
 K,Eligibility Determination,K6,Distribute,1,K6-S1-C1,Notify_Custodians,Parallel,true,ITEM
 M,Entitlement Calculation,M1,Prepare,1,M1-S1-C1,Load_Tax_Tables,Serial,true,ITEM
-M,Entitlement Calculation,M2,Calculate,1,M2-S1-C1,Calc_Gross_Benefit,Parallel,All_Eligible_Accounts == 'True',ITEM
+M,Entitlement Calculation,M2,Calculate,1,M2-S1-C1,Calc_Gross_Benefit,Serial,All_Eligible_Accounts == 'True',ITEM
 M,Entitlement Calculation,M3,Validate,1,M3-S1-C1,Cross_Check_Totals,Consensus,true,ITEM
 M,Entitlement Calculation,M4,Adjust,1,M4-S1-C1,Apply_WHT_Standard,Serial,Tax_Profile == 'Standard_Individual',ITEM
 M,Entitlement Calculation,M5,Approve,1,M5-S1-C1,CFO_Signoff_Sim,Serial,true,JOB

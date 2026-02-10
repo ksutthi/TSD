@@ -1,4 +1,4 @@
-package com.tsd.platform.cartridges.business
+package com.tsd.app.servicing.cartridge
 
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.KernelContext

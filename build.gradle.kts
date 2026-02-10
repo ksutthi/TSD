@@ -1,16 +1,15 @@
-plugins {
-    // 🟢 STABLE KOTLIN (Works perfectly with Gradle 8.x)
-    kotlin("jvm") version "1.9.25"
-    kotlin("plugin.spring") version "1.9.25"
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-    // 🟢 STABLE SPRING BOOT (Latest solid release)
+plugins {
     id("org.springframework.boot") version "3.4.2"
     id("io.spring.dependency-management") version "1.1.7"
+    kotlin("jvm") version "1.9.25"
+    kotlin("plugin.spring") version "1.9.25"
+    kotlin("plugin.jpa") version "1.9.25"
 }
 
 group = "com.tsd"
 version = "0.0.1-SNAPSHOT"
-description = "TSD"
 
 java {
     toolchain {
@@ -23,29 +22,31 @@ repositories {
 }
 
 dependencies {
-    // --- 1. CORE WEB & DATA ---
-    implementation("org.springframework.boot:spring-boot-starter-web") // Includes MVC & Tomcat
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-jdbc")
-
-    // 🟢 SQL Server
-    implementation("com.microsoft.sqlserver:mssql-jdbc")
-
-    // --- 2. BATCH (The critical part) ---
+    // --- 1. SPRING BOOT CORE ---
     implementation("org.springframework.boot:spring-boot-starter-batch")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-web")
 
-    // --- 3. SECURITY ---
+    // 🟢 RE-ADDED: Fixes 'Unresolved reference: security'
     implementation("org.springframework.boot:spring-boot-starter-security")
 
-    // --- 4. KOTLIN ---
+    // --- 2. KOTLIN & COROUTINES ---
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    // 🟢 ADD THIS LINE TO FIX 'runBlocking', 'async', 'delay':
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 
-    // --- 5. TEST ---
+    // 🟢 RE-ADDED: Fixes 'Unresolved reference: kotlinx', 'runBlocking', 'GlobalScope'
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+
+    // --- 3. DATABASE ---
+    // 🟢 UPDATED: Changed from 'runtimeOnly' to 'implementation' so you can import SQLServerDataTable
+    implementation("com.microsoft.sqlserver:mssql-jdbc")
+
+    // --- 4. TESTING ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.batch:spring-batch-test")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
@@ -58,20 +59,7 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-tasks.withType<JavaExec> {
-    jvmArgs = listOf("-Dfile.encoding=UTF-8")
-}
-
+// 🟢 CRITICAL: Keeps your CSV fresh.
 tasks.named<ProcessResources>("processResources") {
-    // ☠️ FORCE update: Always treat resources as "out of date"
     outputs.upToDateWhen { false }
-}
-
-tasks.withType<JavaExec> {
-    // Force the app to run with UTF-8 encoding
-    systemProperty("file.encoding", "UTF-8")
-    // Also force the console to output standard streams in UTF-8
-    standardOutput = System.out
-    errorOutput = System.err
-    jvmArgs("-Dfile.encoding=UTF-8")
 }

@@ -13,7 +13,14 @@ class LoadTaxTablesCartridge : Cartridge {
     override val priority = 1
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        packet.data["WHT_Rate"] = BigDecimal("0.10")
+        val rate = BigDecimal("0.10")
+
+        // 🟢 FIX 1: Save to CONTEXT (So Tax Engine can read it)
+        context.set("WHT_Rate", rate)
+
+        // 🟢 FIX 2: Save to Packet (Legacy backup)
+        packet.data["WHT_Rate"] = rate
+
         println("      🏛️ [M1] Tax Tables Loaded: Rate = 10%")
     }
 

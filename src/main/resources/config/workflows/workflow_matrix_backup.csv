@@ -1,0 +1,3 @@
+Module_ID,Module_Name,Slot_ID,Slot_Name,Step_ID,Cartridge_ID,Cartridge_Name,Strategy,Selector_Logic
+K,Eligibility,K1,Position Aggregation,1,K1-S1-C1,Ingest_CSD_Scripless,Parallel,"Source = 'CSD'"
+K,Eligibility,K1,Position Aggregation,1,K1-S1-C2,Ingest_Internal_Scrip,Parallel,"Source = 'Registrar'"
