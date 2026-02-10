@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * 🧠 KernelContext
  * Thread-safe memory for the workflow execution.
- * 🟢 NOW: Implements ExecutionContext to support InstructionCommands.
+ * 🟢 NOW: Supports 'Job Accumulator' pattern for in-memory state passing.
  */
 class KernelContext(
     // 1. Core Identity
@@ -16,10 +16,14 @@ class KernelContext(
     val tenantId: String = "TSD_DEFAULT",
 
     // 2. Configuration (Optional, for getConfig)
-    private val systemConfig: Map<String, String> = emptyMap()
+    private val systemConfig: Map<String, String> = emptyMap(),
+
+    // 3. 🟢 SHARED JOB STATE (The "Backpack")
+    // This map is shared across the entire Job. It survives when the Item loop finishes.
+    val jobState: ConcurrentHashMap<String, Any> = ConcurrentHashMap()
 ) : ExecutionContext {
 
-    // 3. Thread-Safe Storage
+    // 4. Thread-Safe Storage (Local Item Scope)
     private val memory: MutableMap<String, Any> = ConcurrentHashMap()
 
     // ---------------------------------------------------------
@@ -75,5 +79,39 @@ class KernelContext(
         println("      ⛔ [KernelContext] ABORTING JOB: $reason")
         // We throw a specific exception that the engine can catch to stop the flow
         throw WorkflowAbortException(reason)
+    }
+
+    // ---------------------------------------------------------
+    // 🟢 NEW: Job Accumulator Helpers (The "Proper" Fix)
+    // ---------------------------------------------------------
+
+    /**
+     * Save a calculated payout to the Job-Level memory.
+     * This survives the Item Scope (doesn't get deleted after the loop).
+     */
+    fun addPayoutToJob(accountId: Long, amount: BigDecimal) {
+        // We prefix keys to avoid collisions with other job data
+        jobState["PAYOUT_$accountId"] = amount
+    }
+
+    /**
+     * Retrieve ALL payouts stored in the Job-Level memory.
+     * Used by Bulk/Batch Cartridges (e.g. PDF Gen, Bank File).
+     */
+    fun getAllJobPayouts(): Map<Long, BigDecimal> {
+        return jobState.entries
+            .filter { it.key.startsWith("PAYOUT_") }
+            .associate {
+                val id = it.key.removePrefix("PAYOUT_").toLong()
+                val amt = it.value as BigDecimal
+                id to amt
+            }
+    }
+
+    /**
+     * Mark a payout as processed (remove from memory).
+     */
+    fun removePayoutFromJob(accountId: Long) {
+        jobState.remove("PAYOUT_$accountId")
     }
 }
