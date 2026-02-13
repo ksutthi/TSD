@@ -1,7 +1,6 @@
 package com.tsd.app.authorization.cartridge
 
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.engine.util.SecretContext
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.KernelContext
@@ -13,50 +12,47 @@ import java.util.Random
 class CfoSignoffSimCartridge : Cartridge {
 
     override val id = "CFO_Signoff_Sim"
-    override val version = "1.0"
-    // Prio 1 ensures it runs in the same phase as Identity Mgmt
+    override val version = "2.0" // Version Bump for Clean Code
     override val priority = 1
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
+        // 🟢 FIX 1: Clean Prefix handling (No warnings)
         val prefix = context.getObject<String>("STEP_PREFIX") ?: "[N1]"
-        println(EngineAnsi.CYAN + "      👔 $prefix CFO Robot: Reviewing transaction..." + EngineAnsi.RESET)
 
-        // 1. Get Money from Vault (Consensus needs reliable data!)
-        val accountIdStr = context.getString("Account_ID")
-        val accountId = accountIdStr?.toLongOrNull()
-        var amount = BigDecimal.ZERO
+        println(EngineAnsi.CYAN + "      👔 $prefix CFO Robot: Reviewing transaction ${packet.id}..." + EngineAnsi.RESET)
 
-        if (accountId != null) {
-            val secretMoney = SecretContext.withdraw(accountId)
-            if (secretMoney != null) {
-                amount = secretMoney
-            }
+        // 🟢 FIX 2: Standardized Amount Retrieval (Matches Bank Cartridge)
+        // We get the money from the Packet, not SecretContext (Legacy)
+        val rawAmount = packet.data["Net_Amount"]
+        val amount: BigDecimal = when (rawAmount) {
+            is BigDecimal -> rawAmount
+            is Double -> BigDecimal.valueOf(rawAmount)
+            is String -> BigDecimal(rawAmount)
+            else -> BigDecimal.ZERO
         }
 
-        // 2. CFO Logic: If amount > 100k, he flips a coin
+        // 2. CFO Logic: If amount > 100k, he checks deeper
         val riskThreshold = BigDecimal("100000.00")
         val isHighRisk = amount > riskThreshold
 
         if (isHighRisk) {
-            println(EngineAnsi.YELLOW + "      👔 $prefix CFO: This is a High Value amount ($amount). Checking my schedule..." + EngineAnsi.RESET)
+            println(EngineAnsi.YELLOW + "      👔 $prefix CFO: High Value ($amount THB). Checking risk matrix..." + EngineAnsi.RESET)
 
             // Simulate "Human" Delay
             try { Thread.sleep(200) } catch (e: InterruptedException) {}
 
-            // 90% Approval Rate (Random Logic)
+            // 90% Approval Rate
             val mood = Random().nextInt(10)
             if (mood > 0) {
                 println(EngineAnsi.GREEN + "      ✅ $prefix CFO: Approved. (Stamped)" + EngineAnsi.RESET)
-                // 🟢 STAMP THE PACKET
                 packet.data["CFO_APPROVAL"] = "YES"
             } else {
-                println(EngineAnsi.RED + "      ⛔ $prefix CFO: REJECTED! I don't like this Account." + EngineAnsi.RESET)
-                // Mark as rejected
+                println(EngineAnsi.RED + "      ⛔ $prefix CFO: REJECTED! Risk too high." + EngineAnsi.RESET)
                 packet.data["CFO_APPROVAL"] = "NO"
                 throw RuntimeException("CFO Refused to Sign!")
             }
         } else {
-            println(EngineAnsi.GREEN + "      ✅ $prefix CFO: Small change. Auto-signed." + EngineAnsi.RESET)
+            println(EngineAnsi.GREEN + "      ✅ $prefix CFO: Small change ($amount THB). Auto-signed." + EngineAnsi.RESET)
             packet.data["CFO_APPROVAL"] = "YES"
         }
     }
