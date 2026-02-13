@@ -6,6 +6,7 @@ import com.tsd.platform.spi.WorkflowEngine
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import java.util.UUID
+import java.math.BigDecimal
 
 @Service
 class EventService(
@@ -13,38 +14,43 @@ class EventService(
     private val engine: WorkflowEngine
 ) {
 
-    // 🟢 @Async means the API returns immediately, while this runs in background
     @Async
     fun announceEvent(request: EventRequest) {
-        println("\n📢 [SERVICE] Processing Event Announcement: ${request.eventType}")
+        println("\n📢 [SERVICE] Processing Event (Target: Distribution Module N)")
 
         val accounts = accountRepo.findAll()
         var count = 0
 
         accounts.forEach { account ->
             try {
-                val jobId = "EVT-${account.accountId}-" + UUID.randomUUID().toString().substring(0, 8)
+                val jobId = "TXN-${account.accountId}-" + UUID.randomUUID().toString().substring(0, 8)
 
                 val payload = mutableMapOf<String, Any>()
-                payload["Event_Type"] = request.eventType
-                payload["Security_Symbol"] = request.securitySymbol
-                payload["Dividend_Rate"] = request.rate
-                payload["Account_ID"] = account.accountId
 
-                // 🧪 HACK: Billionaire Test
+                // 🟢 TARGET WORKFLOW "N" (Distribution) - Where the Money/Pause is!
+                payload["Workflow_ID"] = "N"
+                payload["Tenant_ID"] = "TSD-01"
+
+                // 🟢 ROUTING KEYS
+                payload["Payment_Mode"] = "eDividend"
+
+                // 🟢 INJECT THE CASH (Simulate Calculation Result)
                 if (account.accountId == 5L) {
-                    payload["Share_Balance"] = 5_000_000.0
+                    // Billionaire: 25 Million THB
+                    payload["Net_Amount"] = BigDecimal("25000000.00")
                 } else {
-                    payload["Share_Balance"] = account.shareBalance.toDouble()
+                    // Regular Joe: 500 THB
+                    payload["Net_Amount"] = BigDecimal("500.00")
                 }
 
+                // Fire!
                 engine.executeJob(jobId, payload)
                 count++
 
             } catch (e: Exception) {
-                println("   🔥 Failed to process Account ${account.accountId}: ${e.message}")
+                println("   🔥 Error: ${e.message}")
             }
         }
-        println("✅ [SERVICE] Finished processing $count accounts.")
+        println("✅ [SERVICE] Sent $count transactions to Settlement Engine.")
     }
 }

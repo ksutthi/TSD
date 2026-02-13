@@ -13,37 +13,45 @@ class IngestCSDScriplessCartridge(
     private val accountRepo: AccountBalanceRepository
 ) : Cartridge {
 
-    // 🟢 Standard Boilerplate
     override val id: String = "Ingest_CSD_Scripless"
-    override val version: String = "1.0"
+    override val version: String = "1.1" // Bumped Version
     override val priority: Int = 10
 
     override fun initialize(context: KernelContext) {}
     override fun shutdown() {}
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        val accountId = packet.data["Account_ID"]?.toString()?.toLongOrNull() ?: return
+        // 🟢 FIX: Extract Account ID from the Packet ID string (e.g., "EVT-5-XXX")
+        // Split "EVT-5-AB12" by "-" -> ["EVT", "5", "AB12"] -> Get item [1]
+        val parts = packet.id.split("-")
+        val accountId = if (parts.size >= 2) parts[1].toLongOrNull() else null
 
-        // 🟢 1. Get Dynamic Prefix
-        val prefix = context.getObject<String>("STEP_PREFIX") ?: "[??]"
+        val prefix = context.getObject<String>("STEP_PREFIX") ?: "[INGEST]"
 
-        print(EngineAnsi.GRAY + "   📥 $prefix Reading Balance from Local Ledger..." + EngineAnsi.RESET)
-        println("")
+        if (accountId == null) {
+            println(EngineAnsi.RED + "      ❌ $prefix Critical Error: Could not parse Account ID from '${packet.id}'" + EngineAnsi.RESET)
+            return
+        }
 
-        // 🟢 READ DIRECTLY FROM TABLE
-        val account = accountRepo.findById(accountId).orElse(null)
+        println(EngineAnsi.GRAY + "      📥 $prefix Reading Balance for Acct $accountId (Parsed from ID)..." + EngineAnsi.RESET)
 
-        if (account != null) {
-            val balance = account.quantity // Read the actual DB value
+        // 🟢 READ DIRECTLY FROM VAULT
+        val accountOpt = accountRepo.findById(accountId)
+
+        if (accountOpt.isPresent) {
+            val account = accountOpt.get()
+            val balance = account.quantity
 
             // 2. UPDATE PACKET
             packet.data["Share_Balance"] = balance
+            packet.data["Participant_ID"] = account.participantId
+            packet.data["Tax_Profile"] = account.taxProfile
+            packet.data["Country_Code"] = account.countryCode
+            packet.data["Account_ID"] = accountId // Store it back for others to use safely
 
-            // 🟢 ALIGNMENT FIX: 6 spaces outer + 6 spaces inner
-            println("      " + EngineAnsi.GREEN + "    ✅ $prefix Balance Loaded: $balance shares" + EngineAnsi.RESET)
+            println(EngineAnsi.GREEN + "         ✅ $prefix Balance Loaded: $balance shares" + EngineAnsi.RESET)
         } else {
-            // 🟢 ALIGNMENT FIX: 6 spaces outer + 6 spaces inner
-            println("      " + EngineAnsi.RED + "      ⚠️ $prefix Account $accountId not found in Local Ledger!" + EngineAnsi.RESET)
+            println(EngineAnsi.RED + "         ⚠️ $prefix Account $accountId not found in Vault!" + EngineAnsi.RESET)
             packet.data["Share_Balance"] = BigDecimal.ZERO
         }
     }

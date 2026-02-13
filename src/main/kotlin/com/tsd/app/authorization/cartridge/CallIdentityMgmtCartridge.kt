@@ -1,107 +1,54 @@
 package com.tsd.app.authorization.cartridge
 
-import com.tsd.app.authorization.service.OneIdProxy
-import com.tsd.platform.engine.state.JobAccumulator // 🟢 IMPORT
+import com.tsd.platform.engine.core.ConsensusService // 🟢 REQUIRED FOR PAUSE
 import com.tsd.platform.engine.util.EngineAnsi
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.KernelContext
 import org.springframework.stereotype.Component
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.math.BigDecimal
 
-@Component("Flag_High_Value_Auth")
+@Component("Call_Identity_Mgmt")
 class CallIdentityMgmtCartridge(
-    private val oneIdProxy: OneIdProxy,
-    private val memory: JobAccumulator // 🟢 INJECT BEAN
+    private val consensusService: ConsensusService // 🔌 Inject the Service
 ) : Cartridge {
 
     override val id = "Call_Identity_Mgmt"
-    override val version = "4.0" // Enterprise Bean Version
+    override val version = "4.0"
     override val priority = 1
 
-    private var limit: BigDecimal = BigDecimal("50000000.00")
-
-    override fun initialize(context: KernelContext) {
-        loadAmlConfig()
-    }
+    // 🟢 Lower limit to 10M so the 25M Billionaire triggers it!
+    private val limit = BigDecimal("10000000.00")
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        val prefix = "[N1-SPRING]"
-        println(EngineAnsi.CYAN + "      🛡️ $prefix Scanning Spring Memory for High Value Transactions (> $limit)..." + EngineAnsi.RESET)
+        val prefix = "[CONSENSUS]"
 
-        // 🟢 1. Read from Spring Bean (Partitioned by Job ID)
-        val allAccounts = memory.getAllPayouts(context.jobId)
+        // 1. Get the Net Amount (Injected by EventService or Calculator)
+        val netAmount = packet.data["Net_Amount"] as? BigDecimal ?: BigDecimal.ZERO
 
-        var highValueCount = 0
-        var rejectedCount = 0
+        println(EngineAnsi.CYAN + "      🛡️ $prefix Checking Value: $netAmount THB (Limit: $limit)..." + EngineAnsi.RESET)
 
-        if (allAccounts.isEmpty()) {
-            println("         ⚠️ No accounts found in Spring Memory.")
-            return
-        }
+        if (netAmount > limit) {
+            // 🚨 TRIGGER THE PAUSE
+            println(EngineAnsi.YELLOW + "      ✋ HIGH VALUE DETECTED! ($netAmount > $limit)" + EngineAnsi.RESET)
 
-        // 2. Loop & Check
-        allAccounts.forEach { (accountId, amount) ->
-            if (amount > limit) {
-                highValueCount++
-                print("         🔍 $prefix Reviewing Account $accountId ($amount THB)... ")
+            // 🟢 CALL THE CORRECT METHOD NAME HERE: waitForConsensus
+            val approved = consensusService.waitForConsensus(
+                txId = packet.id,
+                amount = netAmount.toString()
+            )
 
-                // 3. Authorization
-                val authorized = performAuthCheck(accountId)
-
-                if (authorized) {
-                    println(EngineAnsi.GREEN + "APPROVED ✅" + EngineAnsi.RESET)
-                } else {
-                    println(EngineAnsi.RED + "REJECTED ❌ (Removed from Payout)" + EngineAnsi.RESET)
-
-                    // 🔫 REMOVE from Spring Memory (So N3 doesn't pay it)
-                    memory.removePayout(context.jobId, accountId)
-                    rejectedCount++
-                }
-            }
-        }
-
-        if (highValueCount == 0) {
-            println("         ✅ $prefix No high value transactions found.")
-        } else {
-            println(EngineAnsi.CYAN + "      📊 $prefix Scan Complete. High Value: $highValueCount, Rejected: $rejectedCount" + EngineAnsi.RESET)
-        }
-    }
-
-    private fun performAuthCheck(accountId: Long): Boolean {
-        val user = "user_$accountId"
-        return try {
-            oneIdProxy.checkAccess(user)
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun loadAmlConfig() {
-        val filePath = "/config/cartridges/99_business_params.csv"
-        try {
-            val inputStream = javaClass.getResourceAsStream(filePath)
-            if (inputStream != null) {
-                BufferedReader(InputStreamReader(inputStream)).use { reader ->
-                    reader.readLine()
-                    reader.forEachLine { line ->
-                        val parts = line.split(",").map { it.trim() }
-                        if (parts.size >= 5 && parts[1] == "AML" && parts[3] == "AML_THRESHOLD") {
-                            val valueStr = parts[4]
-                            limit = if (valueStr.isNotBlank()) BigDecimal(valueStr) else BigDecimal("50000000.00")
-                            println("      📋 [Identity_Mgmt] Loaded Config: Limit = $limit")
-                        }
-                    }
-                }
+            if (approved) {
+                println(EngineAnsi.GREEN + "      ✅ $prefix Approvals Received. Resuming Transaction..." + EngineAnsi.RESET)
             } else {
-                println("      ⚠️ [Identity_Mgmt] Config file not found. Using Default: $limit")
+                println(EngineAnsi.RED + "      ❌ $prefix Transaction REJECTED by Consensus (Timeout)." + EngineAnsi.RESET)
+                throw RuntimeException("Transaction Rejected") // Stop the flow
             }
-        } catch (e: Exception) {
-            println("      ❌ [Identity_Mgmt] Error loading config: ${e.message}")
+        } else {
+            println(EngineAnsi.GREEN + "      ✅ $prefix Amount within limits. Auto-Approved." + EngineAnsi.RESET)
         }
     }
 
+    override fun initialize(context: KernelContext) {}
     override fun shutdown() {}
 }

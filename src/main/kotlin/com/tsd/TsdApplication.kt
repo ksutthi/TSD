@@ -1,30 +1,32 @@
 package com.tsd
 
+import com.tsd.platform.engine.core.EnterpriseWorkflowEngine
+import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.ComponentScan
 import org.springframework.web.client.RestTemplate
 
 @SpringBootApplication
-// Scans App, Platform, and Integration
-@ComponentScan(basePackages = ["com.tsd"])
 class TsdApplication {
 
-    // 🟢 FIX: Create the missing RestTemplate so OneIdProxy can use it
     @Bean
-    fun runner(jobLauncher: org.springframework.batch.core.launch.JobLauncher,
-               job: org.springframework.batch.core.Job): org.springframework.boot.CommandLineRunner {
-        return org.springframework.boot.CommandLineRunner {
-            val uniqueParams = org.springframework.batch.core.JobParametersBuilder()
-                .addLong("runTime", System.currentTimeMillis()) // 🟢 UNIQUE ID
-                .toJobParameters()
-
-            jobLauncher.run(job, uniqueParams)
-        }
-    }
     fun restTemplate(): RestTemplate {
         return RestTemplate()
+    }
+
+    @Bean
+    fun runner(engine: EnterpriseWorkflowEngine): CommandLineRunner {
+        return CommandLineRunner {
+            // 🟢 FIX: We "use" the engine parameter here to silence the warning
+            println("\n------------------------------------------------------------")
+            println(" SYSTEM ONLINE. Engine Component Loaded: ${engine.javaClass.simpleName}")
+            println(" WAITING FOR SYNC: Workflow execution paused until platform files are ready.")
+            println("------------------------------------------------------------\n")
+
+            // TODO: Uncomment this after syncing 'platform/engine'
+            // engine.executeWorkflow("TSD", "TSD-01")
+        }
     }
 }
 
