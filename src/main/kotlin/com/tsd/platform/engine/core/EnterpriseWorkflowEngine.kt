@@ -140,7 +140,7 @@ class EnterpriseWorkflowEngine(
     // --- HELPERS ---
 
     private fun shouldExecute(rule: MatrixRule, packet: ExchangePacket): Boolean {
-        return rule.selector.isBlank() || rule.selector == "*"
+        return rule.selectorLogic.isBlank() || rule.selectorLogic == "*"
     }
 
     private fun runCartridge(rule: MatrixRule, packet: ExchangePacket, context: KernelContext) {

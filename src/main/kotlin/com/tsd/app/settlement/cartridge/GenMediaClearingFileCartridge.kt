@@ -1,7 +1,7 @@
 package com.tsd.app.settlement.cartridge
 
+import com.tsd.platform.engine.state.JobAccumulator // 🟢 USE BEAN
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.engine.util.SecretContext
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.KernelContext
@@ -10,20 +10,20 @@ import java.math.BigDecimal
 import java.time.LocalDate
 
 @Component("Gen_Media_Clearing_File")
-class GenMediaClearingFileCartridge : Cartridge {
+class GenMediaClearingFileCartridge(
+    private val memory: JobAccumulator // 🟢 INJECT BEAN
+) : Cartridge {
 
     override val id = "Gen_Media_Clearing_File"
-    override val version = "2.0" // 🟢 Upgraded to Bulk Aggregator
+    override val version = "4.0" // Production Version
     override val priority = 30   // Runs BEFORE PDF Generation (Prio 50)
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
-        val prefix = "[N2-BULK]"
+        val prefix = "[N2-SPRING]"
         println(EngineAnsi.CYAN + "      🏦 $prefix Generating Master Bank Media Clearing File..." + EngineAnsi.RESET)
 
-        // 1. Fetch ALL Data (Read-Only)
-        // We do NOT use 'withdraw' here because the PDF Generator (Priority 50)
-        // needs to find the money in the vault later.
-        val allPayments = SecretContext.findAll()
+        // 1. Fetch ALL Data (Read-Only) from Spring Bean
+        val allPayments = memory.getAllPayouts(context.jobId)
 
         if (allPayments.isEmpty()) {
             println(EngineAnsi.YELLOW + "      ⚠️ No data to report to Bank." + EngineAnsi.RESET)

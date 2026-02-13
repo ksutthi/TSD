@@ -16,8 +16,10 @@ class WorkflowLoader(
     private val cartridges: List<Cartridge>,
     private val configMatrix: ConfigMatrix
 ) {
-    // Standard Paths
-    private val WORKFLOW_PATH = "classpath*:config/workflows/workflow_matrix.csv"
+    // 🟢 FIX: Renamed to camelCase (Style warning)
+    private val workflowPath = "classpath*:config/workflows/workflow_matrix.csv"
+
+    // 🟢 FIX: Using 'MatrixRule' to match ConfigMatrix expectation
     val rules = mutableListOf<MatrixRule>()
 
     @PostConstruct
@@ -25,14 +27,15 @@ class WorkflowLoader(
         println(EngineAnsi.CYAN + "--------------------------------------------------" + EngineAnsi.RESET)
         initializeCartridges()
         printCartridgeManifest()
-        loadEnterpriseMatrix() // 🟢 Now prints Tree + Conditions
+        loadEnterpriseMatrix()
         println(EngineAnsi.CYAN + "--------------------------------------------------" + EngineAnsi.RESET)
     }
 
     private fun initializeCartridges() {
         println(EngineAnsi.CYAN + " [WorkflowLoader] 🔌 Initializing Cartridges..." + EngineAnsi.RESET)
         val startupContext = KernelContext(jobId = "STARTUP", tenantId = "SYSTEM")
-        cartridges.forEach { try { it.initialize(startupContext) } catch (e: Exception) {} }
+        // 🟢 FIX: Using '_' for unused parameter
+        cartridges.forEach { try { it.initialize(startupContext) } catch (_: Exception) {} }
     }
 
     private fun printCartridgeManifest() {
@@ -43,22 +46,24 @@ class WorkflowLoader(
             val number = "${index + 1}.".padEnd(4)
             val name = cartridge.id.padEnd(35)
             val version = "v${cartridge.version}".padEnd(8)
-            val prio = "Prio:${cartridge.priority}".padEnd(8)
+
+            // 🟢 FIX: Typo 'prio' -> 'priorityStr'
+            val priorityStr = "Priority:${cartridge.priority}".padEnd(8)
 
             println("      " + EngineAnsi.GREEN + number + "✨ " + EngineAnsi.WHITE + name +
                     EngineAnsi.GRAY + version +
-                    EngineAnsi.YELLOW + prio + EngineAnsi.RESET)
+                    EngineAnsi.YELLOW + priorityStr + EngineAnsi.RESET)
         }
         println("")
     }
 
     private fun loadEnterpriseMatrix() {
-        println(EngineAnsi.CYAN + " [WorkflowLoader] 📂 Loading Enterprise Workflows (Modern Format)..." + EngineAnsi.RESET)
+        println(EngineAnsi.CYAN + " [WorkflowLoader] 📂 Loading Enterprise Workflows (Multi-Tenant)..." + EngineAnsi.RESET)
         val resolver = PathMatchingResourcePatternResolver()
         rules.clear()
 
         try {
-            val resources = resolver.getResources(WORKFLOW_PATH)
+            val resources = resolver.getResources(workflowPath)
             if (resources.isEmpty()) {
                 println(EngineAnsi.RED + "   ❌ ERROR: No Matrix files found!" + EngineAnsi.RESET)
                 return
@@ -67,30 +72,25 @@ class WorkflowLoader(
             for (resource in resources) {
                 BufferedReader(InputStreamReader(resource.inputStream)).use { reader ->
                     reader.lineSequence()
-                        .filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith("Module_ID") }
+                        .filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith("Registrar_Code") }
                         .forEach { line ->
-                            val parts = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex()).map { it.trim().removeSurrounding("\"") }
+                            val parts = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
+                                .map { it.trim().removeSurrounding("\"") }
 
-                            if (parts.size >= 9) {
-                                val modId = parts[0]
-                                val beanName = parts[6]
-
-                                // 🟢 CRITICAL FIX: Define Job Scopes properly
-                                // J = Setup, N = Bulk Distribution, Z = Reporting
-                                val isJobScope = modId == "J" || modId == "N" || modId == "Z"
-                                val determinedScope = if (isJobScope) "JOB" else "ITEM"
-
+                            if (parts.size >= 12) {
                                 val rule = MatrixRule(
-                                    moduleId = modId,
-                                    moduleName = parts[1],
-                                    slotId = parts[2],
-                                    slotName = parts[3],
-                                    stepId = parts[4],
-                                    cartridgeId = parts[5],
-                                    cartridgeName = beanName,
-                                    strategy = parts[7],
-                                    selector = parts[8],
-                                    scope = determinedScope
+                                    registrarCode = parts[0],
+                                    workflowId    = parts[1],
+                                    moduleId      = parts[2],
+                                    moduleName    = parts[3],
+                                    slotId        = parts[4],
+                                    slotName      = parts[5],
+                                    stepId        = parts[6].toIntOrNull() ?: 1,
+                                    cartridgeId   = parts[7],
+                                    cartridgeName = parts[8],
+                                    strategy      = parts[9],
+                                    selectorLogic = parts[10],
+                                    scope         = parts[11]
                                 )
                                 rules.add(rule)
                             }
@@ -101,38 +101,39 @@ class WorkflowLoader(
             println("   ✅ SUCCESS       : Loaded ${rules.size} Modern Matrix Rules.")
             println(EngineAnsi.CYAN + "   🌳 Workflow Tree Visualization:" + EngineAnsi.RESET)
 
-            // 🟢 HIERARCHICAL PRINTING LOGIC 🟢
+            // Visualization Logic
+            val workflows = rules.groupBy { "${it.registrarCode} :: ${it.workflowId}" }
 
-            val modules = rules.groupBy { it.moduleId to it.moduleName }
-
-            modules.forEach { (modPair, modRules) ->
-                val (modId, modName) = modPair
-                val scope = modRules.first().scope
-
-                // Level 1: Module
+            workflows.forEach { (wfKey, wfRules) ->
                 println("")
-                println("      " + EngineAnsi.BLUE + "📦 [$modId] $modName" + EngineAnsi.GRAY + " (Scope: $scope)" + EngineAnsi.RESET)
+                // 🟢 FIX: PURPLE -> MAGENTA (Standard ANSI)
+                println("   " + EngineAnsi.MAGENTA + "🏢 TENANT CONTEXT: [$wfKey]" + EngineAnsi.RESET)
 
-                val slots = modRules.groupBy { it.slotId to it.slotName }
+                val modules = wfRules.groupBy { it.moduleId to it.moduleName }
 
-                slots.forEach { (slotPair, slotRules) ->
-                    val (slotId, slotName) = slotPair
+                modules.forEach { (modPair, modRules) ->
+                    val (modId, modName) = modPair
+                    val scope = modRules.first().scope
 
-                    // Level 2: Slot
-                    println("      " + EngineAnsi.GRAY + "    └─ " + EngineAnsi.YELLOW + "⚙️ [$slotId] $slotName" + EngineAnsi.RESET)
+                    println("      " + EngineAnsi.BLUE + "📦 [$modId] $modName" + EngineAnsi.GRAY + " (Scope: $scope)" + EngineAnsi.RESET)
 
-                    slotRules.forEach { rule ->
-                        val stepInfo = "[S${rule.stepId}]"
-                        val cartridge = rule.cartridgeName
-                        val strat = rule.strategy // "PARALLEL" or "SERIAL" comes from CSV
+                    val slots = modRules.groupBy { it.slotId to it.slotName }
 
-                        // Level 3: Step
-                        println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)
+                    slots.forEach { (slotPair, slotRules) ->
+                        val (slotId, slotName) = slotPair
 
-                        // 🟢 Level 4: Condition (Selector)
-                        // Only print if there is a real condition
-                        if (rule.selector.isNotBlank() && rule.selector != "*") {
-                            println("      " + EngineAnsi.GRAY + "              👉 Cond: " + EngineAnsi.CYAN + rule.selector + EngineAnsi.RESET)
+                        println("      " + EngineAnsi.GRAY + "    └─ " + EngineAnsi.YELLOW + "⚙️ [$slotId] $slotName" + EngineAnsi.RESET)
+
+                        slotRules.forEach { rule ->
+                            val stepInfo = "[S${rule.stepId}]"
+                            val cartridge = rule.cartridgeName
+                            val strat = rule.strategy
+
+                            println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)
+
+                            if (rule.selectorLogic.isNotBlank() && rule.selectorLogic != "true") {
+                                println("      " + EngineAnsi.GRAY + "              👉 Cond: " + EngineAnsi.CYAN + rule.selectorLogic + EngineAnsi.RESET)
+                            }
                         }
                     }
                 }
