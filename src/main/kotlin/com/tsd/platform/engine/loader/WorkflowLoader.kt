@@ -16,10 +16,7 @@ class WorkflowLoader(
     private val cartridges: List<Cartridge>,
     private val configMatrix: ConfigMatrix
 ) {
-    // 🟢 FIX: Renamed to camelCase (Style warning)
     private val workflowPath = "classpath*:config/workflows/workflow_matrix.csv"
-
-    // 🟢 FIX: Using 'MatrixRule' to match ConfigMatrix expectation
     val rules = mutableListOf<MatrixRule>()
 
     @PostConstruct
@@ -34,7 +31,6 @@ class WorkflowLoader(
     private fun initializeCartridges() {
         println(EngineAnsi.CYAN + " [WorkflowLoader] 🔌 Initializing Cartridges..." + EngineAnsi.RESET)
         val startupContext = KernelContext(jobId = "STARTUP", tenantId = "SYSTEM")
-        // 🟢 FIX: Using '_' for unused parameter
         cartridges.forEach { try { it.initialize(startupContext) } catch (_: Exception) {} }
     }
 
@@ -46,8 +42,6 @@ class WorkflowLoader(
             val number = "${index + 1}.".padEnd(4)
             val name = cartridge.id.padEnd(35)
             val version = "v${cartridge.version}".padEnd(8)
-
-            // 🟢 FIX: Typo 'prio' -> 'priorityStr'
             val priorityStr = "Priority:${cartridge.priority}".padEnd(8)
 
             println("      " + EngineAnsi.GREEN + number + "✨ " + EngineAnsi.WHITE + name +
@@ -74,6 +68,7 @@ class WorkflowLoader(
                     reader.lineSequence()
                         .filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith("Registrar_Code") }
                         .forEach { line ->
+                            // Regex splits by comma ONLY if not inside quotes
                             val parts = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
                                 .map { it.trim().removeSurrounding("\"") }
 
@@ -90,7 +85,11 @@ class WorkflowLoader(
                                     cartridgeName = parts[8],
                                     strategy      = parts[9],
                                     selectorLogic = parts[10],
-                                    scope         = parts[11]
+                                    scope         = parts[11],
+
+                                    // 🟢 NEW: Read Column 13 for Config JSON (if exists)
+                                    // Also replaces '' with " to handle CSV escaping
+                                    configJson    = if (parts.size >= 13) parts[12].replace("''", "\"") else "{}"
                                 )
                                 rules.add(rule)
                             }
@@ -100,45 +99,7 @@ class WorkflowLoader(
 
             println("   ✅ SUCCESS       : Loaded ${rules.size} Modern Matrix Rules.")
             println(EngineAnsi.CYAN + "   🌳 Workflow Tree Visualization:" + EngineAnsi.RESET)
-
-            // Visualization Logic
-            val workflows = rules.groupBy { "${it.registrarCode} :: ${it.workflowId}" }
-
-            workflows.forEach { (wfKey, wfRules) ->
-                println("")
-                // 🟢 FIX: PURPLE -> MAGENTA (Standard ANSI)
-                println("   " + EngineAnsi.MAGENTA + "🏢 TENANT CONTEXT: [$wfKey]" + EngineAnsi.RESET)
-
-                val modules = wfRules.groupBy { it.moduleId to it.moduleName }
-
-                modules.forEach { (modPair, modRules) ->
-                    val (modId, modName) = modPair
-                    val scope = modRules.first().scope
-
-                    println("      " + EngineAnsi.BLUE + "📦 [$modId] $modName" + EngineAnsi.GRAY + " (Scope: $scope)" + EngineAnsi.RESET)
-
-                    val slots = modRules.groupBy { it.slotId to it.slotName }
-
-                    slots.forEach { (slotPair, slotRules) ->
-                        val (slotId, slotName) = slotPair
-
-                        println("      " + EngineAnsi.GRAY + "    └─ " + EngineAnsi.YELLOW + "⚙️ [$slotId] $slotName" + EngineAnsi.RESET)
-
-                        slotRules.forEach { rule ->
-                            val stepInfo = "[S${rule.stepId}]"
-                            val cartridge = rule.cartridgeName
-                            val strat = rule.strategy
-
-                            println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)
-
-                            if (rule.selectorLogic.isNotBlank() && rule.selectorLogic != "true") {
-                                println("      " + EngineAnsi.GRAY + "              👉 Cond: " + EngineAnsi.CYAN + rule.selectorLogic + EngineAnsi.RESET)
-                            }
-                        }
-                    }
-                }
-            }
-            println("")
+            printVisualization()
 
             configMatrix.loadRules(rules)
 
@@ -146,5 +107,43 @@ class WorkflowLoader(
             println(EngineAnsi.RED + "   🔥 CRITICAL FAIL: ${e.message}" + EngineAnsi.RESET)
             e.printStackTrace()
         }
+    }
+
+    private fun printVisualization() {
+        val workflows = rules.groupBy { "${it.registrarCode} :: ${it.workflowId}" }
+
+        workflows.forEach { (wfKey, wfRules) ->
+            println("")
+            println("   " + EngineAnsi.MAGENTA + "🏢 TENANT CONTEXT: [$wfKey]" + EngineAnsi.RESET)
+
+            val modules = wfRules.groupBy { it.moduleId to it.moduleName }
+
+            modules.forEach { (modPair, modRules) ->
+                val (modId, modName) = modPair
+                val scope = modRules.first().scope
+
+                println("      " + EngineAnsi.BLUE + "📦 [$modId] $modName" + EngineAnsi.GRAY + " (Scope: $scope)" + EngineAnsi.RESET)
+
+                val slots = modRules.groupBy { it.slotId to it.slotName }
+
+                slots.forEach { (slotPair, slotRules) ->
+                    val (slotId, slotName) = slotPair
+                    println("      " + EngineAnsi.GRAY + "    └─ " + EngineAnsi.YELLOW + "⚙️ [$slotId] $slotName" + EngineAnsi.RESET)
+
+                    slotRules.forEach { rule ->
+                        val stepInfo = "[S${rule.stepId}]"
+                        val cartridge = rule.cartridgeName
+                        val strat = rule.strategy
+                        println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)
+
+                        // Optional: Print config if it exists
+                        if (rule.configJson != "{}") {
+                            println("      " + EngineAnsi.GRAY + "              🔧 Config: " + rule.configJson + EngineAnsi.RESET)
+                        }
+                    }
+                }
+            }
+        }
+        println("")
     }
 }

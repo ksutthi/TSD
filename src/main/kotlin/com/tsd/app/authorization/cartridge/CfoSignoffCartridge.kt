@@ -9,7 +9,7 @@ import java.math.BigDecimal
 import java.util.Random
 
 @Component("CFO_Signoff_Sim")
-class CfoSignoffSimCartridge : Cartridge {
+class CfoSignoffCartridge : Cartridge {
 
     override val id = "CFO_Signoff_Sim"
     override val version = "2.0" // Version Bump for Clean Code

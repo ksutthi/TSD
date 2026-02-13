@@ -1,6 +1,6 @@
 package com.tsd.app.authorization.cartridge
 
-import com.tsd.platform.engine.core.ConsensusService // 🟢 REQUIRED FOR PAUSE
+import com.tsd.platform.engine.core.ConsensusService
 import com.tsd.platform.engine.util.EngineAnsi
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.spi.Cartridge
@@ -10,42 +10,49 @@ import java.math.BigDecimal
 
 @Component("Call_Identity_Mgmt")
 class CallIdentityMgmtCartridge(
-    private val consensusService: ConsensusService // 🔌 Inject the Service
+    private val consensusService: ConsensusService
 ) : Cartridge {
 
     override val id = "Call_Identity_Mgmt"
     override val version = "4.0"
     override val priority = 1
 
-    // 🟢 Lower limit to 10M so the 25M Billionaire triggers it!
+    // Trigger Consensus for amounts > 10 Million
     private val limit = BigDecimal("10000000.00")
 
     override fun execute(packet: ExchangePacket, context: KernelContext) {
         val prefix = "[CONSENSUS]"
 
-        // 1. Get the Net Amount (Injected by EventService or Calculator)
-        val netAmount = packet.data["Net_Amount"] as? BigDecimal ?: BigDecimal.ZERO
+        // 🟢 Robust conversion for Amount
+        val rawAmount = packet.data["Net_Amount"]
+        val netAmount = when (rawAmount) {
+            is BigDecimal -> rawAmount
+            is String -> BigDecimal(rawAmount)
+            is Double -> BigDecimal.valueOf(rawAmount)
+            is Int -> BigDecimal.valueOf(rawAmount.toLong())
+            else -> BigDecimal.ZERO
+        }
 
         println(EngineAnsi.CYAN + "      🛡️ $prefix Checking Value: $netAmount THB (Limit: $limit)..." + EngineAnsi.RESET)
 
         if (netAmount > limit) {
-            // 🚨 TRIGGER THE PAUSE
             println(EngineAnsi.YELLOW + "      ✋ HIGH VALUE DETECTED! ($netAmount > $limit)" + EngineAnsi.RESET)
+            println(EngineAnsi.YELLOW + "         (Transaction is PAUSED. Waiting for 2 votes...)" + EngineAnsi.RESET)
 
-            // 🟢 CALL THE CORRECT METHOD NAME HERE: waitForConsensus
+            // 🟢 BLOCKING CALL: This line freezes execution for up to 60 seconds
             val approved = consensusService.waitForConsensus(
                 txId = packet.id,
                 amount = netAmount.toString()
             )
 
             if (approved) {
-                println(EngineAnsi.GREEN + "      ✅ $prefix Approvals Received. Resuming Transaction..." + EngineAnsi.RESET)
+                println(EngineAnsi.GREEN + "      ✅ $prefix Votes Received. Manager Approved. Resuming..." + EngineAnsi.RESET)
             } else {
-                println(EngineAnsi.RED + "      ❌ $prefix Transaction REJECTED by Consensus (Timeout)." + EngineAnsi.RESET)
-                throw RuntimeException("Transaction Rejected") // Stop the flow
+                println(EngineAnsi.RED + "      ❌ $prefix REJECTED. Timeout or Denied." + EngineAnsi.RESET)
+                throw RuntimeException("Transaction Rejected by Consensus")
             }
         } else {
-            println(EngineAnsi.GREEN + "      ✅ $prefix Amount within limits. Auto-Approved." + EngineAnsi.RESET)
+            println(EngineAnsi.GREEN + "      ✅ $prefix Amount OK. Auto-Approved." + EngineAnsi.RESET)
         }
     }
 

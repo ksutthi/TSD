@@ -1,51 +1,29 @@
-### ==================================================================================
-### 🎭 SCENARIO: HIGH VALUE TRANSACTION PAUSE (The "Yellow Light")
-### ==================================================================================
-
-### 1. 🚀 ANNOUNCE EVENT (Triggers the System)
-#   - Account 1 (Regular): Will be Auto-Approved (< 10M)
-#   - Account 5 (Billionaire): Will be PAUSED (> 10M)
+### 💰 Request: High Value Transaction (Triggers Consensus)
 POST http://localhost:8080/api/event/announce
 Content-Type: application/json
 
 {
-  "eventType": "Cash_Dividend",
+  "eventType": "Dividend_Payment_Q4",
   "securitySymbol": "PTT",
-  "rate": 5.00,
-  "bookClosingDate": "2026-02-15",
-  "paymentDate": "2026-02-28",
-  "currency": "THB",
-  "description": "Special High Yield Dividend"
+  "bookClosingDate": "2026-03-01",
+  "rate": 1.25,
+  "currency": "THB"
 }
 
-### ==================================================================================
-### 🛑 SYSTEM IS NOW PAUSED! (Check your Logs for "TXN-5-xxxx")
-### ⏳ You have 60 seconds to execute the votes below.
-### ==================================================================================
-
-### 2. 🗳️ VOTE #1: CFO APPROVAL
-#   ⚠️ REPLACE "TXN-5-xxxx" with the actual ID from your logs!
+### 🗳️ Vote 1: Manager Alice
 POST http://localhost:8080/api/consensus/vote
 Content-Type: application/json
 
 {
-  "txId": "TXN-5-e9cf7198",
-  "approver": "CFO_Sarah"
+  "txId": "TXN-5-7b57c1c7",
+  "approver": "Manager_Alice"
 }
 
-### 3. 🗳️ VOTE #2: CEO APPROVAL (Final Unblock)
-#   ⚠️ USE THE SAME ID as above!
+### 🗳️ Vote 2: Manager Bob
 POST http://localhost:8080/api/consensus/vote
 Content-Type: application/json
 
 {
-  "txId": "TXN-5-e9cf7198",
-  "approver": "CEO_Mike"
+  "txId": "TXN-5-7b57c1c7",
+  "approver": "Manager_Bob"
 }
-
-### ==================================================================================
-### 📊 OPTIONAL: CHECK SYSTEM HEALTH
-### ==================================================================================
-
-### 4. 🏥 HEALTH CHECK
-GET http://localhost:8080/actuator/health

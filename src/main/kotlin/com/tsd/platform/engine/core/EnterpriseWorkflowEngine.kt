@@ -1,14 +1,15 @@
 package com.tsd.platform.engine.core
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.tsd.platform.engine.loader.WorkflowLoader
 import com.tsd.platform.engine.util.EngineAnsi
 import com.tsd.platform.model.registry.ExchangePacket
 import com.tsd.platform.model.registry.MatrixRule
 import com.tsd.platform.persistence.AuditLog
 import com.tsd.platform.persistence.AuditRepository
+import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.KernelContext
 import com.tsd.platform.spi.WorkflowEngine
-import com.tsd.platform.spi.Cartridge
 import kotlinx.coroutines.*
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
@@ -17,50 +18,67 @@ import org.springframework.stereotype.Service
 @Primary
 class EnterpriseWorkflowEngine(
     private val workflowLoader: WorkflowLoader,
-    private val existingCartridges: List<Cartridge>,
-    private val auditRepo: AuditRepository
+    private val existingCartridges: List<Cartridge>, // 🟢 Raw list containing duplicates
+    private val auditRepo: AuditRepository,
+    private val objectMapper: ObjectMapper
 ) : WorkflowEngine {
 
-    // ⚡ Fast Lookup Map: "CartridgeID" -> Instance
-    private val cartridgeMap = existingCartridges.associateBy { it.id }
+    // 🟢 INTELLIGENT LOADING: Filters duplicates and keeps only the highest version
+    private val cartridgeMap: Map<String, Cartridge> = existingCartridges
+        .groupBy { it.id }
+        .mapValues { (id, versions) ->
+            if (versions.size > 1) {
+                // If multiple versions exist, pick the one with the highest version string
+                val winner = versions.maxByOrNull { it.version }!!
+                println(EngineAnsi.YELLOW + "   ⚠️ [Engine] Duplicate Cartridge ID '$id' detected. Using v${winner.version} (Ignored older versions)." + EngineAnsi.RESET)
+                winner
+            } else {
+                versions.first()
+            }
+        }
 
     override fun executeJob(jobId: String, data: Map<String, Any>) {
         println(EngineAnsi.CYAN + "🚀 [Engine-Core] Starting Job: $jobId" + EngineAnsi.RESET)
 
-        // 1. Inflate Packet
         val packet = ExchangePacket(id = jobId, traceId = jobId)
-        packet.data.putAll(data)
+        // 🟢 SAFETY: Copy map safely
+        data.forEach { (k, v) -> packet.data[k] = v }
 
-        // 2. Create Context & Populate
         val context = KernelContext(jobId, "DEFAULT")
         data.forEach { (k, v) -> context.set(k, v) }
 
-        // 3. Run Strategies
-        runWorkflow(packet, context)
+        try {
+            runWorkflow(packet, context)
+        } catch (e: Exception) {
+            println(EngineAnsi.RED + "💥 Job Failed: ${e.message}" + EngineAnsi.RESET)
+            throw e
+        }
     }
 
     private fun runWorkflow(packet: ExchangePacket, context: KernelContext) {
         val allRules = workflowLoader.rules
 
-        // 🟢 FIX: Use getObject instead of get
-        val targetModule = context.getObject<String>("Workflow_ID")
+        // 🟢 FIX 1: Correct Lookup Logic (Workflow + Registrar)
+        val workflowId = context.getObject<String>("Workflow_ID") ?: "UNKNOWN"
+        val registrarCode = context.getObject<String>("Registrar_Code") ?: "TSD"
 
-        val activeRules = if (targetModule != null) {
-            allRules.filter { it.moduleId == targetModule }
-        } else {
-            allRules // Fallback: Run everything (Legacy mode)
+        // println("   🔍 Debug: Looking for Registrar='$registrarCode', Workflow='$workflowId'")
+
+        // 🟢 FIX 2: Filter by WorkflowId, NOT ModuleId
+        val activeRules = allRules.filter {
+            it.registrarCode == registrarCode && it.workflowId == workflowId
         }
 
         if (activeRules.isEmpty()) {
-            println(EngineAnsi.RED + "   ⚠️ No rules found for Workflow_ID: $targetModule" + EngineAnsi.RESET)
+            println(EngineAnsi.RED + "   ⚠️ No rules found for Registrar: $registrarCode, Workflow_ID: $workflowId" + EngineAnsi.RESET)
             return
         }
 
-        // Group by Unique Step ID
+        // Group by Module -> Slot -> Step
         val stepGroups = activeRules.groupBy { "${it.moduleId}-${it.slotId}-${it.stepId}" }
 
-        stepGroups.forEach { (_, rulesInStep) ->
-            // Assume strategy is consistent across the step group
+        stepGroups.forEach { (stepCode, rulesInStep) ->
+            // println("      ⚙️ Executing Step: $stepCode")
             val strategy = rulesInStep.first().strategy.uppercase()
 
             when (strategy) {
@@ -71,8 +89,7 @@ class EnterpriseWorkflowEngine(
                 else        -> executeSerial(rulesInStep, packet, context)
             }
         }
-
-        println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job ${context.jobId} Complete." + EngineAnsi.RESET)
+        println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job ${context.jobId} Workflow Finished." + EngineAnsi.RESET)
     }
 
     // --- STRATEGIES ---
@@ -83,6 +100,7 @@ class EnterpriseWorkflowEngine(
         }
     }
 
+    // ⚡ SCATTER-GATHER (Parallel)
     private fun executeParallel(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
         val activeRules = rules.filter { shouldExecute(it, packet) }
         if (activeRules.isEmpty()) return
@@ -90,17 +108,18 @@ class EnterpriseWorkflowEngine(
         println("      " + EngineAnsi.CYAN + "⚡ [Parallel] Forking ${activeRules.size} tasks..." + EngineAnsi.RESET)
 
         runBlocking {
+            // SCATTER: Launch all tasks
             val jobs = activeRules.map { rule ->
                 async(Dispatchers.Default) {
                     runCartridge(rule, packet, context)
                 }
             }
+            // GATHER: Wait for all to finish
             jobs.awaitAll()
         }
     }
 
     private fun executeConsensus(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
-        // Run logic normally; the Cartridge itself calls consensusService.waitForConsensus()
         executeSerial(rules, packet, context)
     }
 
@@ -108,6 +127,7 @@ class EnterpriseWorkflowEngine(
         val activeRules = rules.filter { shouldExecute(it, packet) }
         if (activeRules.isEmpty()) return
 
+        // Fire and Forget
         @OptIn(DelicateCoroutinesApi::class)
         GlobalScope.launch(Dispatchers.IO) {
             activeRules.forEach { rule ->
@@ -120,12 +140,33 @@ class EnterpriseWorkflowEngine(
         }
     }
 
+    // 🟢 RETRY LOGIC
     private fun executeWithRetry(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
         rules.filter { shouldExecute(it, packet) }.forEach { rule ->
-            try {
-                runCartridge(rule, packet, context)
-            } catch (e: Exception) {
-                println(EngineAnsi.RED + "      🔄 [Retry] Failed. Retrying..." + EngineAnsi.RESET)
+            val maxRetries = 3
+            var attempt = 0
+            var success = false
+            var lastError: Exception? = null
+
+            while (attempt < maxRetries && !success) {
+                attempt++
+                try {
+                    if (attempt > 1) {
+                        println(EngineAnsi.YELLOW + "      🔄 [Retry] Attempt $attempt/$maxRetries for ${rule.cartridgeId}..." + EngineAnsi.RESET)
+                    }
+                    runCartridge(rule, packet, context)
+                    success = true
+                } catch (e: Exception) {
+                    lastError = e
+                    if (attempt < maxRetries) {
+                        try { Thread.sleep(500) } catch (_: InterruptedException) {} // Backoff
+                    }
+                }
+            }
+
+            if (!success) {
+                println(EngineAnsi.RED + "      ❌ [Retry] Giving up after $maxRetries attempts." + EngineAnsi.RESET)
+                throw lastError ?: RuntimeException("Retry Failed")
             }
         }
     }
@@ -134,34 +175,20 @@ class EnterpriseWorkflowEngine(
 
     private fun shouldExecute(rule: MatrixRule, packet: ExchangePacket): Boolean {
         val logic = rule.selectorLogic
-
-        // 1. Simple Case
         if (logic.isBlank() || logic == "*") return true
 
-        // 2. Parse "KEY == VALUE"
-        if (logic.contains("==")) {
-            val parts = logic.split("==")
-            val key = parts[0].trim()
-            val expectedValue = parts[1].trim().replace("'", "")
-
-            // Look in Packet Data
-            val actualValue = packet.data[key]?.toString()
-                ?: if (key == "Event_Type") packet.data["Event_Type"]?.toString() else null
-
-            return actualValue == expectedValue
+        try {
+            if (logic.contains("==")) {
+                val parts = logic.split("==")
+                val key = parts[0].trim()
+                val expectedValue = parts[1].trim().replace("'", "")
+                val actualValue = packet.data[key]?.toString() ?: ""
+                return actualValue == expectedValue
+            }
+        } catch (e: Exception) {
+            return false
         }
-
-        // 3. Parse "KEY > VALUE"
-        if (logic.contains(">")) {
-            val parts = logic.split(">")
-            val key = parts[0].trim()
-            val threshold = parts[1].trim().toDoubleOrNull() ?: 0.0
-
-            val actualValue = packet.data[key]?.toString()?.toDoubleOrNull() ?: 0.0
-            return actualValue > threshold
-        }
-
-        return false
+        return true
     }
 
     private fun runCartridge(rule: MatrixRule, packet: ExchangePacket, context: KernelContext) {
@@ -171,10 +198,29 @@ class EnterpriseWorkflowEngine(
         if (cartridge != null) {
             try {
                 context.set("STEP_PREFIX", stepCode)
+
+                // 🟢 CONFIG PARSING FIX
+                if (rule.configJson.isNotBlank() && rule.configJson != "{}") {
+                    try {
+                        val configMap = objectMapper.readValue(rule.configJson, Map::class.java)
+                        configMap.forEach { (key, value) ->
+                            if (key != null && value != null) {
+                                context.set(key.toString(), value)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("      ⚠️ Config parsing failed for $stepCode")
+                    }
+                }
+
                 cartridge.execute(packet, context)
+                // 🟢 Log to DB (Async)
                 logToDb(packet.id, rule, stepCode, "SUCCESS", "Executed")
             } catch (e: Exception) {
-                println(EngineAnsi.RED + "      💥 Error in ${rule.cartridgeId}: ${e.message}" + EngineAnsi.RESET)
+                // Only print error if NOT retrying (Caller handles retry logging)
+                if (rule.strategy != "RETRY") {
+                    println(EngineAnsi.RED + "      💥 Error in ${rule.cartridgeId}: ${e.message}" + EngineAnsi.RESET)
+                }
                 logToDb(packet.id, rule, stepCode, "FAILED", e.message ?: "Error")
                 throw e
             }
@@ -198,7 +244,7 @@ class EnterpriseWorkflowEngine(
                     message = msg
                 )
                 auditRepo.save(log)
-            } catch (e: Exception) { }
+            } catch (_: Exception) { }
         }
     }
 }
