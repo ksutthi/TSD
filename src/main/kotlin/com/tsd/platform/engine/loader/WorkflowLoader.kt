@@ -2,14 +2,15 @@ package com.tsd.platform.engine.loader
 
 import com.tsd.platform.config.ConfigMatrix
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.model.registry.MatrixRule
+import com.tsd.platform.engine.model.MatrixRule
 import com.tsd.platform.spi.Cartridge
-import com.tsd.platform.spi.KernelContext
+import com.tsd.platform.spi.ExecutionContext
 import jakarta.annotation.PostConstruct
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.stereotype.Component
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import com.tsd.platform.engine.state.KernelContext
 
 @Component
 class WorkflowLoader(

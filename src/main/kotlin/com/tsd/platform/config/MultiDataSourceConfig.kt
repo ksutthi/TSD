@@ -23,8 +23,8 @@ class MultiDataSourceConfig {
     @Configuration
     @EnableTransactionManagement
     @EnableJpaRepositories(
-        // 👇 Scans BOTH App (for your logic) and Platform (for SuspendedAction)
-        basePackages = ["com.tsd.app", "com.tsd.platform"],
+        // 🟢 FIX: Scan "com.tsd" to find Repositories in 'adapter', 'app', and 'platform'
+        basePackages = ["com.tsd"],
         entityManagerFactoryRef = "entityManagerFactory",
         transactionManagerRef = "transactionManager"
     )
@@ -50,8 +50,8 @@ class MultiDataSourceConfig {
         ): LocalContainerEntityManagerFactoryBean {
             return builder
                 .dataSource(dataSource)
-                // 👇 Scans ALL locations for Entities (Registry, App, Persistence)
-                .packages("com.tsd.platform.model.registry", "com.tsd.app", "com.tsd.platform.persistence")
+                // 🟢 FIX: Scan "com.tsd" to find Entities in 'core', 'app', and 'platform'
+                .packages("com.tsd")
                 .persistenceUnit("tsdRegistry")
                 .build()
         }
@@ -71,6 +71,7 @@ class MultiDataSourceConfig {
     @Configuration
     @EnableTransactionManagement
     @EnableJpaRepositories(
+        // Keep this specific to avoid conflicts with the primary DB
         basePackages = ["com.tsd.platform.model.oneid"],
         entityManagerFactoryRef = "oneIdEntityManagerFactory",
         transactionManagerRef = "oneIdTransactionManager"

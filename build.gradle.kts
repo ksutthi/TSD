@@ -12,7 +12,6 @@ plugins {
 group = "com.tsd"
 version = "0.0.1-SNAPSHOT"
 
-// 🟢 DEFINE THE VERSION ONCE (Matches what Spring Boot 3.4.2 uses)
 val jooqVersion = "3.19.18"
 
 java {
@@ -21,33 +20,34 @@ java {
     }
 }
 
+sourceSets {
+    main {
+        java.srcDir("build/generated/jooq")
+        kotlin.srcDir("build/generated/jooq")
+    }
+}
+
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    // --- 1. SPRING BOOT CORE ---
     implementation("org.springframework.boot:spring-boot-starter-batch")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-security")
 
-    // --- 2. KOTLIN & COROUTINES ---
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
-    // --- 3. DATABASE (Runtime) ---
     implementation("com.microsoft.sqlserver:mssql-jdbc")
-    implementation("org.springframework.boot:spring-boot-starter-jooq") // Uses Spring's version (3.19.18)
+    implementation("org.springframework.boot:spring-boot-starter-jooq")
 
-    // --- 4. JOOQ GENERATOR (Build Time) ---
-    // 🟢 FORCE SAME VERSION HERE
     jooqGenerator("com.h2database:h2")
     jooqGenerator("org.jooq:jooq-meta-extensions:$jooqVersion")
 
-    // --- 5. TESTING ---
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.batch:spring-batch-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
@@ -72,7 +72,7 @@ tasks.named<ProcessResources>("processResources") {
 // JOOQ GENERATOR CONFIGURATION
 // ============================================================================
 jooq {
-    version.set(jooqVersion) // 🟢 FORCE SAME VERSION HERE
+    version.set(jooqVersion)
 
     configurations {
         create("main") {
@@ -80,7 +80,17 @@ jooq {
                 logging = org.jooq.meta.jaxb.Logging.WARN
                 jdbc.apply {
                     driver = "org.h2.Driver"
-                    url = "jdbc:h2:mem:jooq-gen;INIT=RUNSCRIPT FROM 'src/main/resources/schema.sql'"
+
+                    // 🟢 FINAL WINDOWS FIX:
+                    // 1. Get absolute path (C:\Users\...)
+                    // 2. FORCE replace backslashes with forward slashes (C:/Users/...)
+                    // 3. Do NOT use .toURI() or 'file:' prefix.
+                    val dbFile = project.file("src/main/resources/db/migration/V1__Init_Schema.sql")
+                    val safePath = dbFile.absolutePath.replace("\\", "/")
+
+                    println("DEBUG: Sending this path to H2: $safePath")
+
+                    url = "jdbc:h2:mem:jooq-gen;MODE=MSSQLServer;INIT=RUNSCRIPT FROM '$safePath'"
                     user = "sa"
                     password = ""
                 }
@@ -93,7 +103,7 @@ jooq {
                         excludes = ""
                     }
                     target.apply {
-                        packageName = "com.tsd.platform.persistence.jooq.schema"
+                        packageName = "com.tsd.adapter.out.persistence.jooq.schema"
                         directory = "build/generated/jooq"
                     }
                 }

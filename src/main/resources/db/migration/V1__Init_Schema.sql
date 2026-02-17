@@ -20,3 +20,15 @@ INSERT INTO AccountBalances (Account_ID, Quantity) VALUES (2, 20000.00);
 INSERT INTO AccountBalances (Account_ID, Quantity) VALUES (3, 30000.00);
 INSERT INTO AccountBalances (Account_ID, Quantity) VALUES (4, 40000.00);
 INSERT INTO AccountBalances (Account_ID, Quantity) VALUES (5, 30000000.00); -- The Billionaire
+
+-- 4. Workflow Job Table (Updated with all required columns)
+-- If the table already exists, you might need to DROP it first or just replace the create statement if you are using H2 memory.
+DROP TABLE IF EXISTS WORKFLOW_JOB;
+
+CREATE TABLE WORKFLOW_JOB (
+                              job_id VARCHAR(255) NOT NULL PRIMARY KEY,
+                              workflow_id VARCHAR(255) NOT NULL,  -- New
+                              current_step VARCHAR(255) NOT NULL, -- New
+                              status VARCHAR(50) NOT NULL,
+                              payload NVARCHAR(MAX)               -- New (For JSON)
+);

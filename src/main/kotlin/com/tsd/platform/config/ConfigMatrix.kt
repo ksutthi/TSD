@@ -1,7 +1,7 @@
 package com.tsd.platform.config
 
-import com.tsd.platform.model.registry.ExecutionBlock
-import com.tsd.platform.model.registry.MatrixRule
+import com.tsd.platform.engine.model.ExecutionBlock
+import com.tsd.platform.engine.model.MatrixRule
 import org.springframework.stereotype.Component
 
 @Component

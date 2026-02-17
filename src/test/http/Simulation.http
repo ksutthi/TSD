@@ -1,29 +1,29 @@
-### 💰 Request: High Value Transaction (Triggers Consensus)
-POST http://localhost:8080/api/event/announce
+POST http://localhost:8080/api/workflow/execute
 Content-Type: application/json
 
 {
-  "eventType": "Dividend_Payment_Q4",
-  "securitySymbol": "PTT",
-  "bookClosingDate": "2026-03-01",
-  "rate": 1.25,
-  "currency": "THB"
+  "user": "kitti.admin",
+  "Workflow_ID": "TSD-01",
+  "Event_Type": "Cash_Dividend",
+  "amount": 15000000.00,
+  "Net_Amount": 15000000.00,
+  "Account_ID": "WALLET-VIP"
 }
 
-### 🗳️ Vote 1: Manager Alice
+### VOTE 1 (Senior Manager)
 POST http://localhost:8080/api/consensus/vote
 Content-Type: application/json
 
 {
-  "txId": "TXN-5-7b57c1c7",
-  "approver": "Manager_Alice"
+  "txId": "API-b7597ee8",
+  "approver": "Senior_Manager"
 }
 
-### 🗳️ Vote 2: Manager Bob
+### VOTE 2 (Director - Just in case it needs 2!)
 POST http://localhost:8080/api/consensus/vote
 Content-Type: application/json
 
 {
-  "txId": "TXN-5-7b57c1c7",
-  "approver": "Manager_Bob"
+  "txId": "API-b7597ee8",
+  "approver": "Director"
 }

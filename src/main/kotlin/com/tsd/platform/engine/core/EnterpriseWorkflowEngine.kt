@@ -1,18 +1,19 @@
 package com.tsd.platform.engine.core
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tsd.adapter.out.persistence.AuditRepository
 import com.tsd.platform.engine.loader.WorkflowLoader
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.model.registry.ExchangePacket
-import com.tsd.platform.model.registry.MatrixRule
-import com.tsd.platform.persistence.AuditLog
-import com.tsd.platform.persistence.AuditRepository
+import com.tsd.platform.spi.ExchangePacket
+import com.tsd.platform.engine.model.MatrixRule
+import com.tsd.core.model.AuditLog
 import com.tsd.platform.spi.Cartridge
-import com.tsd.platform.spi.KernelContext
+import com.tsd.platform.spi.ExecutionContext
 import com.tsd.platform.spi.WorkflowEngine
 import kotlinx.coroutines.*
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
+import com.tsd.platform.engine.state.KernelContext
 
 @Service
 @Primary
@@ -36,6 +37,20 @@ class EnterpriseWorkflowEngine(
                 versions.first()
             }
         }
+
+    // 🟢 NEW HELPER METHOD: This fixes the "Unresolved reference" in TsdApplication
+    fun executeWorkflow(registrar: String, workflowId: String) {
+        val jobId = "JOB-${System.currentTimeMillis()}"
+        println(EngineAnsi.CYAN + "🚀 [Engine-Entry] Manual Trigger: $workflowId ($registrar) -> Job: $jobId" + EngineAnsi.RESET)
+
+        val contextData = mapOf(
+            "Registrar_Code" to registrar,
+            "Workflow_ID" to workflowId
+        )
+
+        // Delegate to the main execution method
+        executeJob(jobId, contextData)
+    }
 
     override fun executeJob(jobId: String, data: Map<String, Any>) {
         println(EngineAnsi.CYAN + "🚀 [Engine-Core] Starting Job: $jobId" + EngineAnsi.RESET)
@@ -89,7 +104,7 @@ class EnterpriseWorkflowEngine(
                 else        -> executeSerial(rulesInStep, packet, context)
             }
         }
-        println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job ${context.jobId} Workflow Finished." + EngineAnsi.RESET)
+        println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job ${context.getEventID()} Workflow Finished." + EngineAnsi.RESET)
     }
 
     // --- STRATEGIES ---
