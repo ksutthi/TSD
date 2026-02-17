@@ -1,4 +1,4 @@
-package com.tsd.platform.engine.loader
+package com.tsd.platform.config.loader
 
 import com.tsd.platform.config.ConfigMatrix
 import com.tsd.platform.engine.util.EngineAnsi
