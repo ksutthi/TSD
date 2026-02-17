@@ -33,18 +33,22 @@ class WorkflowController(
         }
 
         // --- STEP 2: PREPARE DATA ---
-        // Create a mutable map to ensure we can add defaults
         val jobData = payload.toMutableMap()
 
-        // Ensure defaults if missing
+        // 🟢 SMART DEFAULTS (For easier testing)
         jobData.putIfAbsent("Event_Type", "Cash_Dividend")
         jobData.putIfAbsent("Currency", "THB")
+        jobData.putIfAbsent("Registrar_Code", "TSD")   // Default to TSD
+        jobData.putIfAbsent("Workflow_ID", "TSD-01")   // Default to Standard Workflow
+
+        // 🟢 DEBUG LOG: Verify we received the Money!
+        println("   💰 Payload Check: Amount=${jobData["AMOUNT"]}, Investor=${jobData["INVESTOR_ID"]}")
 
         // Generate a Job ID
         val jobId = "API-${UUID.randomUUID().toString().substring(0, 8)}"
 
-        // --- STEP 3: EXECUTION (The New Way) ---
-        // Just pass the ID and the Data! The Engine handles the rest.
+        // --- STEP 3: EXECUTION ---
+        // Pass the Dynamic Map to the Engine
         engine.executeJob(jobId, jobData)
 
         return ResponseEntity.ok(mapOf(

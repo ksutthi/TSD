@@ -1,29 +1,14 @@
+### 🚀 Execute Workflow (Dynamic JSON with Security & Money)
 POST http://localhost:8080/api/workflow/execute
 Content-Type: application/json
 
 {
-  "user": "kitti.admin",
+  "user": "system_admin",
   "Workflow_ID": "TSD-01",
-  "Event_Type": "Cash_Dividend",
-  "amount": 15000000.00,
-  "Net_Amount": 15000000.00,
-  "Account_ID": "WALLET-VIP"
-}
-
-### VOTE 1 (Senior Manager)
-POST http://localhost:8080/api/consensus/vote
-Content-Type: application/json
-
-{
-  "txId": "API-b7597ee8",
-  "approver": "Senior_Manager"
-}
-
-### VOTE 2 (Director - Just in case it needs 2!)
-POST http://localhost:8080/api/consensus/vote
-Content-Type: application/json
-
-{
-  "txId": "API-b7597ee8",
-  "approver": "Director"
+  "Registrar_Code": "TSD",
+  "AMOUNT": 50000.00,
+  "CURRENCY": "THB",
+  "INVESTOR_ID": "ACCT-001",
+  "WALLET_ID": "W-998877",
+  "TARGET_BANK": "BBL_TH"
 }

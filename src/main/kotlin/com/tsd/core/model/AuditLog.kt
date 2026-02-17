@@ -33,8 +33,10 @@ data class AuditLog(
     val cartridge: String,
 
     // 7) Status (e.g. "SUCCESS")
+    // 🟢 UPDATED: Now uses the Type-Safe Enum, but saves as String in DB
+    @Enumerated(EnumType.STRING)
     @Column(name = "Status")
-    val status: String,
+    val status: WorkflowStatus,
 
     // 8) Timestamp
     @Column(name = "Timestamp")

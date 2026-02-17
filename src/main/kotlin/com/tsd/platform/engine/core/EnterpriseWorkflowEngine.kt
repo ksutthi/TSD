@@ -2,25 +2,28 @@ package com.tsd.platform.engine.core
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tsd.adapter.out.persistence.AuditRepository
-import com.tsd.platform.config.loader.WorkflowLoader
-import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.platform.spi.ExchangePacket
-import com.tsd.platform.engine.model.MatrixRule
 import com.tsd.core.model.AuditLog
+import com.tsd.core.model.WorkflowStatus
+import com.tsd.platform.config.loader.WorkflowLoader
+import com.tsd.platform.engine.model.MatrixRule
+import com.tsd.platform.engine.state.KernelContext
+import com.tsd.platform.engine.util.EngineAnsi
 import com.tsd.platform.spi.Cartridge
+import com.tsd.platform.spi.ExchangePacket
 import com.tsd.platform.spi.WorkflowEngine
 import kotlinx.coroutines.*
 import org.springframework.context.annotation.Primary
+import org.springframework.jdbc.core.JdbcTemplate // 🟢 NEW IMPORT
 import org.springframework.stereotype.Service
-import com.tsd.platform.engine.state.KernelContext
 
 @Service
 @Primary
 class EnterpriseWorkflowEngine(
     private val workflowLoader: WorkflowLoader,
-    private val existingCartridges: List<Cartridge>, // 🟢 Raw list containing duplicates
+    private val existingCartridges: List<Cartridge>,
     private val auditRepo: AuditRepository,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val jdbcTemplate: JdbcTemplate // 🟢 INJECT DB ACCESS
 ) : WorkflowEngine {
 
     // 🟢 INTELLIGENT LOADING: Filters duplicates and keeps only the highest version
@@ -28,7 +31,6 @@ class EnterpriseWorkflowEngine(
         .groupBy { it.id }
         .mapValues { (id, versions) ->
             if (versions.size > 1) {
-                // If multiple versions exist, pick the one with the highest version string
                 val winner = versions.maxByOrNull { it.version }!!
                 println(EngineAnsi.YELLOW + "   ⚠️ [Engine] Duplicate Cartridge ID '$id' detected. Using v${winner.version} (Ignored older versions)." + EngineAnsi.RESET)
                 winner
@@ -37,48 +39,116 @@ class EnterpriseWorkflowEngine(
             }
         }
 
-    // 🟢 NEW HELPER METHOD: This fixes the "Unresolved reference" in TsdApplication
     fun executeWorkflow(registrar: String, workflowId: String) {
         val jobId = "JOB-${System.currentTimeMillis()}"
         println(EngineAnsi.CYAN + "🚀 [Engine-Entry] Manual Trigger: $workflowId ($registrar) -> Job: $jobId" + EngineAnsi.RESET)
 
+        // 🟢 UPDATED: Injecting REAL Mock Data so Cartridges don't crash or print "null"
         val contextData = mapOf(
             "Registrar_Code" to registrar,
-            "Workflow_ID" to workflowId
+            "Workflow_ID" to workflowId,
+            "AMOUNT" to 50000.00,                 // 💰 50k THB
+            "CURRENCY" to "THB",
+            "INVESTOR_ID" to "ACCT-001",          // 👤 Matches your DataLoader mock
+            "WALLET_ID" to "W-998877",
+            "TARGET_BANK" to "BBL_TH"
         )
 
-        // Delegate to the main execution method
         executeJob(jobId, contextData)
     }
 
     override fun executeJob(jobId: String, data: Map<String, Any>) {
         println(EngineAnsi.CYAN + "🚀 [Engine-Core] Starting Job: $jobId" + EngineAnsi.RESET)
 
+        // 🟢 STEP 1: PERSIST PAYLOAD (The "Black Box" Recorder)
+        // We save the raw JSON immediately. If we crash 1ms later, we have the data to RESUME.
+        try {
+            val jsonPayload = objectMapper.writeValueAsString(data)
+            jdbcTemplate.update(
+                "INSERT INTO Workflow_Journal (Job_ID, Payload, Status, Created_At) VALUES (?, ?, ?, GETDATE())",
+                jobId, jsonPayload, "INIT"
+            )
+            println("   💾 [Journal] Payload saved to Database.")
+        } catch (e: Exception) {
+            println("   ⚠️ [Journal] Failed to persist payload: ${e.message}")
+            // We continue anyway, but risk data loss if crash occurs
+        }
+
+        // 🟢 DEBUG: Print raw input keys
+        println("   🔍 [Engine-Debug] Raw Input Keys: ${data.keys}")
+
+        // 🟢 STATE MACHINE: Start at INIT
+        var currentStatus = WorkflowStatus.INIT
+
         val packet = ExchangePacket(id = jobId, traceId = jobId)
-        // 🟢 SAFETY: Copy map safely
-        data.forEach { (k, v) -> packet.data[k] = v }
+
+        // 🟢 STEP 2: SANITIZE & LOAD DATA
+        data.forEach { (k, v) ->
+            // Convert numbers to BigDecimal (Financial Safety)
+            val safeValue = when (v) {
+                is Double -> java.math.BigDecimal.valueOf(v)
+                is Float -> java.math.BigDecimal.valueOf(v.toDouble())
+                is Int -> java.math.BigDecimal.valueOf(v.toLong())
+                is Long -> java.math.BigDecimal.valueOf(v)
+                else -> v
+            }
+            // Store Original Key
+            packet.data[k] = safeValue
+            // Store Lowercase Key (Helper)
+            packet.data[k.lowercase()] = safeValue
+        }
+
+        // 🟢 STEP 3: TRANSLATION LAYER
+        // Map "AMOUNT" -> "Net_Amount"
+        if (packet.data.containsKey("AMOUNT")) {
+            packet.data["Net_Amount"] = packet.data["AMOUNT"]!!
+        }
+        // Map "WALLET_ID" -> "Account_ID"
+        if (packet.data.containsKey("WALLET_ID")) {
+            packet.data["Account_ID"] = packet.data["WALLET_ID"]!!
+        }
 
         val context = KernelContext(jobId, "DEFAULT")
-        data.forEach { (k, v) -> context.set(k, v) }
+        packet.data.forEach { (k, v) -> context.set(k, v) }
 
         try {
+            // TRANSITION: INIT -> PENDING
+            currentStatus.verifyTransition(WorkflowStatus.PENDING)
+            currentStatus = WorkflowStatus.PENDING
+            updateJournalStatus(jobId, "PENDING") // 🟢 Update Journal
+
             runWorkflow(packet, context)
+
+            // TRANSITION: PENDING -> CLEARED -> SETTLED
+            currentStatus.verifyTransition(WorkflowStatus.CLEARED)
+            currentStatus = WorkflowStatus.CLEARED
+
+            currentStatus.verifyTransition(WorkflowStatus.SETTLED)
+            currentStatus = WorkflowStatus.SETTLED
+            updateJournalStatus(jobId, "SETTLED") // 🟢 Update Journal
+
+            println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job $jobId Completed Successfully. State: $currentStatus" + EngineAnsi.RESET)
+
         } catch (e: Exception) {
-            println(EngineAnsi.RED + "💥 Job Failed: ${e.message}" + EngineAnsi.RESET)
+            currentStatus = WorkflowStatus.FAILED
+            updateJournalStatus(jobId, "FAILED") // 🟢 Update Journal
+            println(EngineAnsi.RED + "💥 Job Failed: ${e.message}. State: $currentStatus" + EngineAnsi.RESET)
             throw e
         }
     }
 
+    // 🟢 HELPER: Updates the Journal Table
+    private fun updateJournalStatus(jobId: String, status: String) {
+        try {
+            jdbcTemplate.update("UPDATE Workflow_Journal SET Status = ? WHERE Job_ID = ?", status, jobId)
+        } catch (e: Exception) { /* Ignore non-critical DB errors */ }
+    }
+
     private fun runWorkflow(packet: ExchangePacket, context: KernelContext) {
         val allRules = workflowLoader.rules
-
-        // 🟢 FIX 1: Correct Lookup Logic (Workflow + Registrar)
         val workflowId = context.getObject<String>("Workflow_ID") ?: "UNKNOWN"
         val registrarCode = context.getObject<String>("Registrar_Code") ?: "TSD"
 
-        // println("   🔍 Debug: Looking for Registrar='$registrarCode', Workflow='$workflowId'")
-
-        // 🟢 FIX 2: Filter by WorkflowId, NOT ModuleId
         val activeRules = allRules.filter {
             it.registrarCode == registrarCode && it.workflowId == workflowId
         }
@@ -88,11 +158,9 @@ class EnterpriseWorkflowEngine(
             return
         }
 
-        // Group by Module -> Slot -> Step
         val stepGroups = activeRules.groupBy { "${it.moduleId}-${it.slotId}-${it.stepId}" }
 
         stepGroups.forEach { (stepCode, rulesInStep) ->
-            // println("      ⚙️ Executing Step: $stepCode")
             val strategy = rulesInStep.first().strategy.uppercase()
 
             when (strategy) {
@@ -103,7 +171,6 @@ class EnterpriseWorkflowEngine(
                 else        -> executeSerial(rulesInStep, packet, context)
             }
         }
-        println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job ${context.getEventID()} Workflow Finished." + EngineAnsi.RESET)
     }
 
     // --- STRATEGIES ---
@@ -114,7 +181,6 @@ class EnterpriseWorkflowEngine(
         }
     }
 
-    // ⚡ SCATTER-GATHER (Parallel)
     private fun executeParallel(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
         val activeRules = rules.filter { shouldExecute(it, packet) }
         if (activeRules.isEmpty()) return
@@ -122,13 +188,11 @@ class EnterpriseWorkflowEngine(
         println("      " + EngineAnsi.CYAN + "⚡ [Parallel] Forking ${activeRules.size} tasks..." + EngineAnsi.RESET)
 
         runBlocking {
-            // SCATTER: Launch all tasks
             val jobs = activeRules.map { rule ->
                 async(Dispatchers.Default) {
                     runCartridge(rule, packet, context)
                 }
             }
-            // GATHER: Wait for all to finish
             jobs.awaitAll()
         }
     }
@@ -141,7 +205,6 @@ class EnterpriseWorkflowEngine(
         val activeRules = rules.filter { shouldExecute(it, packet) }
         if (activeRules.isEmpty()) return
 
-        // Fire and Forget
         @OptIn(DelicateCoroutinesApi::class)
         GlobalScope.launch(Dispatchers.IO) {
             activeRules.forEach { rule ->
@@ -154,7 +217,6 @@ class EnterpriseWorkflowEngine(
         }
     }
 
-    // 🟢 RETRY LOGIC
     private fun executeWithRetry(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
         rules.filter { shouldExecute(it, packet) }.forEach { rule ->
             val maxRetries = 3
@@ -173,7 +235,7 @@ class EnterpriseWorkflowEngine(
                 } catch (e: Exception) {
                     lastError = e
                     if (attempt < maxRetries) {
-                        try { Thread.sleep(500) } catch (_: InterruptedException) {} // Backoff
+                        try { Thread.sleep(500) } catch (_: InterruptedException) {}
                     }
                 }
             }
@@ -213,7 +275,6 @@ class EnterpriseWorkflowEngine(
             try {
                 context.set("STEP_PREFIX", stepCode)
 
-                // 🟢 CONFIG PARSING FIX
                 if (rule.configJson.isNotBlank() && rule.configJson != "{}") {
                     try {
                         val configMap = objectMapper.readValue(rule.configJson, Map::class.java)
@@ -228,14 +289,16 @@ class EnterpriseWorkflowEngine(
                 }
 
                 cartridge.execute(packet, context)
-                // 🟢 Log to DB (Async)
-                logToDb(packet.id, rule, stepCode, "SUCCESS", "Executed")
+
+                logToDb(packet.id, rule, stepCode, WorkflowStatus.CLEARED, "Executed")
+
             } catch (e: Exception) {
-                // Only print error if NOT retrying (Caller handles retry logging)
                 if (rule.strategy != "RETRY") {
                     println(EngineAnsi.RED + "      💥 Error in ${rule.cartridgeId}: ${e.message}" + EngineAnsi.RESET)
                 }
-                logToDb(packet.id, rule, stepCode, "FAILED", e.message ?: "Error")
+
+                logToDb(packet.id, rule, stepCode, WorkflowStatus.FAILED, e.message ?: "Error")
+
                 throw e
             }
         } else {
@@ -243,7 +306,7 @@ class EnterpriseWorkflowEngine(
         }
     }
 
-    private fun logToDb(traceId: String, rule: MatrixRule, stepCode: String, status: String, msg: String) {
+    private fun logToDb(traceId: String, rule: MatrixRule, stepCode: String, status: WorkflowStatus, msg: String) {
         @OptIn(DelicateCoroutinesApi::class)
         GlobalScope.launch(Dispatchers.IO) {
             try {
