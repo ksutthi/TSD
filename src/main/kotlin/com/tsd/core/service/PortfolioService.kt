@@ -1,6 +1,6 @@
 package com.tsd.core.service
 
-import com.tsd.adapter.out.persistence.AccountBalanceRepository
+import com.tsd.adapter.output.persistence.AccountBalanceRepository
 import jakarta.persistence.EntityManager
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

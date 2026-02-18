@@ -4,21 +4,25 @@ import com.tsd.platform.config.ConfigMatrix
 import com.tsd.platform.engine.util.EngineAnsi
 import com.tsd.platform.engine.model.MatrixRule
 import com.tsd.platform.spi.Cartridge
-import com.tsd.platform.spi.ExecutionContext
+import com.tsd.platform.engine.state.KernelContext
 import jakarta.annotation.PostConstruct
+import org.slf4j.LoggerFactory
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.stereotype.Component
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import com.tsd.platform.engine.state.KernelContext
 
 @Component
 class WorkflowLoader(
     private val cartridges: List<Cartridge>,
     private val configMatrix: ConfigMatrix
 ) {
-    private val workflowPath = "classpath*:config/workflows/workflow_matrix.csv"
+    // 🟢 GLOBAL SEARCH: Finds ALL CSV files anywhere in the project
+    // We will filter for the right ones inside the logic below.
+    private val workflowPath = "classpath*:**/*.csv"
+
     val rules = mutableListOf<MatrixRule>()
+    private val logger = LoggerFactory.getLogger(WorkflowLoader::class.java)
 
     @PostConstruct
     fun init() {
@@ -32,7 +36,13 @@ class WorkflowLoader(
     private fun initializeCartridges() {
         println(EngineAnsi.CYAN + " [WorkflowLoader] 🔌 Initializing Cartridges..." + EngineAnsi.RESET)
         val startupContext = KernelContext(jobId = "STARTUP", tenantId = "SYSTEM")
-        cartridges.forEach { try { it.initialize(startupContext) } catch (_: Exception) {} }
+        cartridges.forEach {
+            try {
+                it.initialize(startupContext)
+            } catch (e: Exception) {
+                logger.warn("⚠️ Cartridge [${it.javaClass.simpleName}] initialization warning: ${e.message}")
+            }
+        }
     }
 
     private fun printCartridgeManifest() {
@@ -40,73 +50,94 @@ class WorkflowLoader(
         println("   🎉 Total Cartridges Discovered: ${cartridges.size}")
 
         cartridges.sortedBy { it.priority }.forEachIndexed { index, cartridge ->
-            val number = "${index + 1}.".padEnd(4)
-            val name = cartridge.id.padEnd(35)
-            val version = "v${cartridge.version}".padEnd(8)
-            val priorityStr = "Priority:${cartridge.priority}".padEnd(8)
+            val name = cartridge.javaClass.simpleName.padEnd(25)
+            val version = cartridge.version.padEnd(6)
+            val priority = cartridge.priority.toString()
 
-            println("      " + EngineAnsi.GREEN + number + "✨ " + EngineAnsi.WHITE + name +
-                    EngineAnsi.GRAY + version +
-                    EngineAnsi.YELLOW + priorityStr + EngineAnsi.RESET)
+            val color = when (cartridge.priority) {
+                1 -> EngineAnsi.GREEN
+                999 -> EngineAnsi.RED
+                else -> EngineAnsi.YELLOW
+            }
+
+            println("      ${index + 1}.  $color✨ $name $version Priority:$priority" + EngineAnsi.RESET)
         }
         println("")
     }
 
     private fun loadEnterpriseMatrix() {
-        println(EngineAnsi.CYAN + " [WorkflowLoader] 📂 Loading Enterprise Workflows (Multi-Tenant)..." + EngineAnsi.RESET)
+        println(EngineAnsi.CYAN + " [WorkflowLoader] 📂 Loading Enterprise Workflows (Global Search)..." + EngineAnsi.RESET)
         val resolver = PathMatchingResourcePatternResolver()
         rules.clear()
 
         try {
+            // 🟢 1. SCAN EVERYTHING
             val resources = resolver.getResources(workflowPath)
-            if (resources.isEmpty()) {
-                println(EngineAnsi.RED + "   ❌ ERROR: No Matrix files found!" + EngineAnsi.RESET)
-                return
-            }
+
+            var filesLoaded = 0
 
             for (resource in resources) {
+                val filename = resource.filename ?: "Unknown"
+
+                // 🟢 2. SMART FILTER: Only load our specific workflow files
+                // This ignores '10_system.csv' or other random CSVs, but finds our files anywhere
+                val isTargetFile = filename.contains("core_payments", ignoreCase = true) ||
+                        filename.contains("chaos_scenarios", ignoreCase = true) ||
+                        filename.contains("workflow_matrix", ignoreCase = true) // Fallback for old name
+
+                if (!isTargetFile) continue
+
+                println("   📄 Found Workflow File: " + EngineAnsi.YELLOW + filename + EngineAnsi.RESET + " (at ${resource.url})")
+                filesLoaded++
+
                 BufferedReader(InputStreamReader(resource.inputStream)).use { reader ->
                     reader.lineSequence()
                         .filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith("Registrar_Code") }
-                        .forEach { line ->
-                            // Regex splits by comma ONLY if not inside quotes
-                            val parts = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
-                                .map { it.trim().removeSurrounding("\"") }
-
-                            if (parts.size >= 12) {
-                                val rule = MatrixRule(
-                                    registrarCode = parts[0],
-                                    workflowId    = parts[1],
-                                    moduleId      = parts[2],
-                                    moduleName    = parts[3],
-                                    slotId        = parts[4],
-                                    slotName      = parts[5],
-                                    stepId        = parts[6].toIntOrNull() ?: 1,
-                                    cartridgeId   = parts[7],
-                                    cartridgeName = parts[8],
-                                    strategy      = parts[9],
-                                    selectorLogic = parts[10],
-                                    scope         = parts[11],
-
-                                    // 🟢 NEW: Read Column 13 for Config JSON (if exists)
-                                    // Also replaces '' with " to handle CSV escaping
-                                    configJson    = if (parts.size >= 13) parts[12].replace("''", "\"") else "{}"
-                                )
-                                rules.add(rule)
-                            }
-                        }
+                        .forEach { line -> parseRow(line, filename) }
                 }
             }
 
-            println("   ✅ SUCCESS       : Loaded ${rules.size} Modern Matrix Rules.")
-            println(EngineAnsi.CYAN + "   🌳 Workflow Tree Visualization:" + EngineAnsi.RESET)
-            printVisualization()
-
-            configMatrix.loadRules(rules)
+            if (filesLoaded == 0) {
+                println(EngineAnsi.RED + "   ❌ ERROR: Could not find 'core_payments.csv' or 'chaos_scenarios.csv' ANYWHERE." + EngineAnsi.RESET)
+                println("      Please ensure they are in 'src/main/resources' (any subfolder).")
+            } else {
+                println("   ✅ SUCCESS       : Loaded ${rules.size} Rules from $filesLoaded Files.")
+                printVisualization()
+                configMatrix.loadRules(rules)
+            }
 
         } catch (e: Exception) {
             println(EngineAnsi.RED + "   🔥 CRITICAL FAIL: ${e.message}" + EngineAnsi.RESET)
             e.printStackTrace()
+        }
+    }
+
+    private fun parseRow(line: String, filename: String) {
+        try {
+            val parts = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)".toRegex())
+                .map { it.trim().removeSurrounding("\"") }
+
+            if (parts.size >= 12) {
+                rules.add(MatrixRule(
+                    registrarCode = parts[0],
+                    workflowId    = parts[1],
+                    moduleId      = parts[2],
+                    moduleName    = parts[3],
+                    slotId        = parts[4],
+                    slotName      = parts[5],
+                    stepId        = parts[6].toIntOrNull() ?: 1,
+                    cartridgeId   = parts[7],
+                    cartridgeName = parts[8],
+                    strategy      = parts[9],
+                    selectorLogic = parts[10],
+                    scope         = parts[11],
+                    configJson    = if (parts.size >= 13) parts[12].replace("''", "\"") else "{}"
+                ))
+            } else {
+                logger.warn("Skipping invalid row in $filename: $line")
+            }
+        } catch (e: Exception) {
+            logger.error("Error parsing row in $filename: $line", e)
         }
     }
 
@@ -135,10 +166,10 @@ class WorkflowLoader(
                         val stepInfo = "[S${rule.stepId}]"
                         val cartridge = rule.cartridgeName
                         val strat = rule.strategy
+
                         println("      " + EngineAnsi.GRAY + "         └─ " + EngineAnsi.GREEN + "$stepInfo $cartridge" + EngineAnsi.WHITE + " [$strat]" + EngineAnsi.RESET)
 
-                        // Optional: Print config if it exists
-                        if (rule.configJson != "{}") {
+                        if (rule.configJson != "{}" && rule.configJson.isNotBlank()) {
                             println("      " + EngineAnsi.GRAY + "              🔧 Config: " + rule.configJson + EngineAnsi.RESET)
                         }
                     }

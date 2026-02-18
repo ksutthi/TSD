@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("org.springframework.boot") version "3.4.2"
-    id("io.spring.dependency-management") version "1.1.7"
+    id("io.spring.dependency-management") version "1.1.7" // 🟢 This plugin is KEY
     kotlin("jvm") version "1.9.25"
     kotlin("plugin.spring") version "1.9.25"
     kotlin("plugin.jpa") version "1.9.25"
@@ -11,8 +11,9 @@ plugins {
 
 group = "com.tsd"
 version = "0.0.1-SNAPSHOT"
-
 val jooqVersion = "3.19.18"
+// 🟢 DEFINE SPRING CLOUD VERSION (Compatible with Boot 3.4.x)
+val springCloudVersion = "2024.0.0"
 
 java {
     toolchain {
@@ -31,6 +32,14 @@ repositories {
     mavenCentral()
 }
 
+// 🟢 NEW: dependencyManagement block
+// This tells Gradle which versions of Spring Cloud libraries to use
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}")
+    }
+}
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-batch")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -44,6 +53,11 @@ dependencies {
 
     implementation("com.microsoft.sqlserver:mssql-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-jooq")
+
+    // 🛡️ Circuit Breaker (Resilience4j)
+    // 🟢 REMOVED VERSION: The 'dependencyManagement' block above handles it now.
+    implementation("org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
 
     jooqGenerator("com.h2database:h2")
     jooqGenerator("org.jooq:jooq-meta-extensions:$jooqVersion")
@@ -80,11 +94,6 @@ jooq {
                 logging = org.jooq.meta.jaxb.Logging.WARN
                 jdbc.apply {
                     driver = "org.h2.Driver"
-
-                    // 🟢 FINAL WINDOWS FIX:
-                    // 1. Get absolute path (C:\Users\...)
-                    // 2. FORCE replace backslashes with forward slashes (C:/Users/...)
-                    // 3. Do NOT use .toURI() or 'file:' prefix.
                     val dbFile = project.file("src/main/resources/db/migration/V1__Init_Schema.sql")
                     val safePath = dbFile.absolutePath.replace("\\", "/")
 

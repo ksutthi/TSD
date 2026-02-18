@@ -1,7 +1,7 @@
 package com.tsd.platform.engine.core
 
 import com.tsd.platform.engine.util.EngineAnsi
-import com.tsd.adapter.out.persistence.WorkflowRepository
+import com.tsd.adapter.output.persistence.WorkflowRepository
 import org.springframework.stereotype.Service
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap

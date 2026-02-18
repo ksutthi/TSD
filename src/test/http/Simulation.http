@@ -1,14 +1,19 @@
-### 🚀 Execute Workflow (Dynamic JSON with Security & Money)
-POST http://localhost:8080/api/workflow/execute
+### 🔴 Trip the Circuit (Run 10x)
+POST http://localhost:8080/api/v1/workflows/execute
 Content-Type: application/json
 
 {
-  "user": "system_admin",
-  "Workflow_ID": "TSD-01",
-  "Registrar_Code": "TSD",
-  "AMOUNT": 50000.00,
-  "CURRENCY": "THB",
-  "INVESTOR_ID": "ACCT-001",
-  "WALLET_ID": "W-998877",
-  "TARGET_BANK": "BBL_TH"
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "transactionId": "TXN-FAIL-001",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-VIP-001",
+  "walletId": "W-VAULT-MAIN",
+  "targetBank": "KBANK"
 }
+
+
+
+### 🟢 Heal the Service
+POST http://localhost:8080/api/v1/workflows/chaos/toggle-identity?down=false

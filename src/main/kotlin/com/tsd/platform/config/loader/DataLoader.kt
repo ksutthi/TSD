@@ -1,6 +1,6 @@
 package com.tsd.platform.config.loader
 
-import com.tsd.adapter.out.persistence.AccountBalanceRepository
+import com.tsd.adapter.output.persistence.AccountBalanceRepository
 import com.tsd.core.model.AccountBalance
 import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner

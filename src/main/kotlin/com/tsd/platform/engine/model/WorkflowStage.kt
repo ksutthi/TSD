@@ -1,7 +1,7 @@
 package com.tsd.platform.engine.model
 
 import jakarta.persistence.*
-import com.tsd.adapter.out.persistence.JsonAttributeConverter // 👈 FIXED: Importing the real class
+import com.tsd.adapter.output.persistence.JsonAttributeConverter // 👈 FIXED: Importing the real class
 
 @Entity
 @Table(name = "Workflow_Stage")

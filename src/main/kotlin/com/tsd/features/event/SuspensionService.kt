@@ -1,7 +1,7 @@
 package com.tsd.features.event
 
 import com.tsd.core.model.ResolutionRequest
-import com.tsd.adapter.out.persistence.SuspendedActionRepository
+import com.tsd.adapter.output.persistence.SuspendedActionRepository
 import com.tsd.platform.spi.WorkflowEngine
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

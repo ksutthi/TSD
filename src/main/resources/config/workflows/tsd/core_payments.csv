@@ -1,0 +1,8 @@
+Registrar_Code,Workflow_ID,Module_ID,Module_Name,Slot_ID,Slot_Name,Step_ID,Cartridge_ID,Cartridge_Name,Strategy,Selector_Logic,Execution_Scope,Config_Json
+TSD,TSD-01,N,Distribution,N1,Prepare,1,Check_Liquidity,Check_Liquidity,Consensus,true,ITEM,"{}"
+TSD,TSD-01,N,Distribution,N1,Prepare,2,Call_Identity_Mgmt,Call_Identity_Mgmt,Consensus,*,ITEM,"{}"
+TSD,TSD-01,N,Distribution,N1,Prepare,3,Enrich_Market_Data,GetMarketPriceCartridge,Serial,*,ITEM,"{}"
+TSD,TSD-01,N,Distribution,N2,Instruct,1,Gen_Media_Clearing_File,Gen_Media_Clearing_File,Serial,Payment_Mode == 'eDividend',ITEM,"{}"
+TSD,TSD-01,N,Distribution,N3,Execute,1,Execute_Swift_Payment,Execute_Swift_Payment,Parallel,Payment_Mode == 'SWIFT',ITEM,"{}"
+TSD,TSD-01,N,Distribution,N3,Execute,2,Execute_BahtNet_Payment,Execute_BahtNet_Payment,Parallel,Payment_Mode == 'BAHTNET',ITEM,"{}"
+TSD,TSD-01,N,Distribution,N5,Confirm,1,Update_Wallet_Balance,Update_Wallet_Balance,Consensus,true,ITEM,"{}"

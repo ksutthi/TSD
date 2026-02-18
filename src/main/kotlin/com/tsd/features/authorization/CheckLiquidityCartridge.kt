@@ -10,36 +10,36 @@ import java.math.BigDecimal
 @Component("Check_Liquidity")
 class CheckLiquidityCartridge : Cartridge {
 
-    // 🟢 1. Implement ALL required members
     override val id = "Check_Liquidity"
     override val version = "1.0"
-    override val priority = 10 // Higher priority for authorization checks
+    override val priority = 10
 
-    // 🟢 2. Lifecycle methods
-    override fun initialize(context: ExecutionContext) {
-        // Optional: Load config or connect to services here
-    }
+    override fun initialize(context: ExecutionContext) { }
 
-    override fun shutdown() {
-        // Optional: Cleanup resources
-    }
+    override fun shutdown() { }
 
     override fun execute(packet: ExchangePacket, context: ExecutionContext) {
-        // 🟢 3. Fix "Unresolved reference get" -> use getObject
-        val amountStr = context.getObject<Any>("amount")?.toString() ?: "0.00"
+        // Standardizing input reading
+        val amountStr = packet.data["AMOUNT"]?.toString() ?: "0.00"
         val amount = BigDecimal(amountStr)
 
         println(EngineAnsi.YELLOW + "   💰 [Check_Liquidity] Verifying Asset Liquidity for $amount THB..." + EngineAnsi.RESET)
 
-        val limit = BigDecimal("10000000.00") // Mock Limit: 10 Million
+        val limit = BigDecimal("10000000.00")
 
         if (amount > limit) {
-            // 🟢 FIX: We do NOT throw an exception here.
-            // We Log a Warning and let the Engine's Consensus Logic handle the "Stop & Vote".
             println(EngineAnsi.CYAN + "   ⚠️ [Check_Liquidity] High Value Detected ($amount). Flagging for Consensus..." + EngineAnsi.RESET)
         } else {
-            // Only print "Auto-Approved" if it's under the limit
-            println(EngineAnsi.GREEN + "   ✅ [Check_Liquidity] Amount OK. Auto-Approved." + EngineAnsi.RESET)
+            println(EngineAnsi.GREEN + "   ✅ [Check_Liquidity] Amount OK. Assets RESERVED." + EngineAnsi.RESET)
         }
+    }
+
+    // 🟢 SAGA COMPENSATION: The "Undo" Logic
+    // If the workflow crashes later, the Engine calls this function.
+    override fun compensate(packet: ExchangePacket, context: ExecutionContext) {
+        val amountStr = packet.data["AMOUNT"]?.toString() ?: "0.00"
+
+        println(EngineAnsi.RED + "      🔓 [ROLLBACK] Check_Liquidity: Releasing lock on $amountStr THB..." + EngineAnsi.RESET)
+        println(EngineAnsi.RED + "      ✅ [ROLLBACK] Assets Un-Reserved successfully." + EngineAnsi.RESET)
     }
 }

@@ -1,6 +1,6 @@
 package com.tsd.features.event
 
-import com.tsd.adapter.out.persistence.AccountBalanceRepository
+import com.tsd.adapter.output.persistence.AccountBalanceRepository
 import com.tsd.core.model.EventRequest
 import com.tsd.platform.spi.WorkflowEngine
 import org.springframework.scheduling.annotation.Async

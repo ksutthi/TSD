@@ -5,22 +5,28 @@ package com.tsd.core.model
  * This Enum enforces the State Machine rules.
  */
 enum class WorkflowStatus {
+
     // 1. The Beginning
     INIT {
-        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(PENDING, REJECTED)
+        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(RUNNING, REJECTED)
     },
 
-    // 2. The Processing State (Waiting for votes/checks)
+    // 🟢 2. NEW: The Engine is executing (Persistence Layer needs this)
+    RUNNING {
+        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(PENDING, CLEARED, SETTLED, FAILED)
+    },
+
+    // 3. Waiting for Async / Consensus
     PENDING {
-        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(CLEARED, REJECTED, FAILED)
+        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(RUNNING, CLEARED, REJECTED, FAILED)
     },
 
-    // 3. The Happy Path (Ready for Settlement)
+    // 4. Step Success (Audit Trail)
     CLEARED {
-        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(SETTLED, FAILED)
+        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(RUNNING, SETTLED, FAILED)
     },
 
-    // 4. Terminal States (The End)
+    // 🏁 5. Terminal States (Success)
     SETTLED {
         override fun allowedTransitions(): Set<WorkflowStatus> = emptySet()
     },
@@ -29,8 +35,15 @@ enum class WorkflowStatus {
         override fun allowedTransitions(): Set<WorkflowStatus> = emptySet()
     },
 
+    // 6. Failure & Recovery
     FAILED {
-        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(PENDING) // Allow retry?
+        // We can go to COMPENSATED (Rollback success) or PENDING (Retry)
+        override fun allowedTransitions(): Set<WorkflowStatus> = setOf(COMPENSATED, PENDING)
+    },
+
+    // 🟢 7. NEW: Saga Rollback Completed
+    COMPENSATED {
+        override fun allowedTransitions(): Set<WorkflowStatus> = emptySet()
     };
 
     /**
@@ -46,8 +59,9 @@ enum class WorkflowStatus {
         if (target == this) return // Staying same is always okay
 
         if (!allowedTransitions().contains(target)) {
+            // 🟢 Improved Error Message for Debugging
             throw IllegalStateException(
-                "❌ ILLEGAL STATE MOVE: Cannot go from $name to $target. " +
+                "❌ ILLEGAL STATE MOVE: Cannot go from '$name' to '$target'. " +
                         "Valid moves are: ${allowedTransitions()}"
             )
         }

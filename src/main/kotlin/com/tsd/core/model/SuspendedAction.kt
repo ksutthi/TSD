@@ -1,6 +1,6 @@
 package com.tsd.core.model
 
-import com.tsd.adapter.out.persistence.JsonAttributeConverter
+import com.tsd.adapter.output.persistence.JsonAttributeConverter
 import jakarta.persistence.*
 import java.time.LocalDateTime
 

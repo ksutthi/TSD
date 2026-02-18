@@ -1,6 +1,6 @@
 package com.tsd.features.eligibility
 
-import com.tsd.adapter.out.persistence.AccountBalanceRepository
+import com.tsd.adapter.output.persistence.AccountBalanceRepository
 import com.tsd.platform.spi.ExchangePacket
 import com.tsd.platform.spi.ExecutionContext
 import com.tsd.platform.spi.Cartridge

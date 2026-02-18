@@ -18,5 +18,13 @@ interface Cartridge {
     // 🟢 Decoupled: execute now receives 'ExecutionContext', not 'KernelContext'
     fun execute(packet: ExchangePacket, context: ExecutionContext)
 
+    // 🟢 NEW: The "Undo" Button (Saga Pattern)
+    // If the workflow fails later, the Engine calls this to REVERSE the 'execute' action.
+    // Example: If execute() did "Debit 50k", compensate() must do "Credit 50k".
+    // Default: Do nothing (Safe for Read-Only steps like "Check Balance").
+    fun compensate(packet: ExchangePacket, context: ExecutionContext) {
+        // No-op by default
+    }
+
     fun shutdown()
 }

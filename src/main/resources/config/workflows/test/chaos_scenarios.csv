@@ -1,0 +1,5 @@
+Registrar_Code,Workflow_ID,Module_ID,Module_Name,Slot_ID,Slot_Name,Step_ID,Cartridge_ID,Cartridge_Name,Strategy,Selector_Logic,Execution_Scope,Config_Json
+TEST,T,CHAOS,Chaos Module,T1,Parallel Sleep,1,Chaos_Monkey,Monkey,PARALLEL,*,ITEM,"{''CHAOS_MODE'': ''SLEEP''}"
+TEST,T,CHAOS,Chaos Module,T1,Parallel Sleep,1,Chaos_Monkey,Monkey,PARALLEL,*,ITEM,"{''CHAOS_MODE'': ''SLEEP''}"
+TEST,T,CHAOS,Chaos Module,T2,Retry Crash,1,Chaos_Monkey,Monkey,RETRY,*,ITEM,"{''CHAOS_MODE'': ''CRASH_ONCE''}"
+TEST,T,CHAOS,Chaos Module,T3,Async Log,1,Chaos_Monkey,Monkey,ASYNC,*,ITEM,"{''CHAOS_MODE'': ''ASYNC_Log''}"
