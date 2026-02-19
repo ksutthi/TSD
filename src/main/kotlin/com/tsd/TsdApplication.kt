@@ -9,11 +9,13 @@ import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.web.client.RestTemplate
+import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication(scanBasePackages = ["com.tsd"])
 // Note: Since you have MultiDataSourceConfig, you technically don't need these two lines below
 // (the config file handles it), but keeping them is usually harmless if packages match.
 @EnableJpaRepositories(basePackages = ["com.tsd"])
+@EnableScheduling // 🟢 ADD THIS
 @EntityScan(basePackages = ["com.tsd"])
 class TsdApplication {
 

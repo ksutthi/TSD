@@ -1,19 +1,23 @@
-### 🔴 Trip the Circuit (Run 10x)
+### =========================================
+### TEST 3: Network Down (Simulated Outage)
+### =========================================
+### 1. Remove crash from Cartridge!
+### 2. Add `throw RuntimeException("Network Down")` inside OutboxRelayWorker.sendToExternalSystem()
+### 3. Restart App.
+### 4. Click Play below.
+### RESULT: Immediate 200 OK here, but Console shows worker failing every 5s. DB Status = PENDING.
 POST http://localhost:8080/api/v1/workflows/execute
 Content-Type: application/json
 
 {
   "registrar": "TSD",
   "workflowId": "TSD-01",
-  "transactionId": "TXN-FAIL-001",
-  "amount": 50000.00,
-  "currency": "THB",
+  "transactionId": "TXN-OUTAGE-002",
+  "amount": 1500.00,
+  "currency": "EUR",
   "investorId": "ACCT-VIP-001",
   "walletId": "W-VAULT-MAIN",
-  "targetBank": "KBANK"
+  "targetBank": "DEUTSCHE",
+  "Payment_Mode": "SWIFT",
+  "Workflow_ID": "JOB-OUTAGE-002"
 }
-
-
-
-### 🟢 Heal the Service
-POST http://localhost:8080/api/v1/workflows/chaos/toggle-identity?down=false

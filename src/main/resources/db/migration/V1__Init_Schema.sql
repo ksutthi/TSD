@@ -32,3 +32,13 @@ CREATE TABLE WORKFLOW_JOB (
                               status VARCHAR(50) NOT NULL,
                               payload NVARCHAR(MAX)               -- New (For JSON)
 );
+
+CREATE TABLE PUBLIC.OUTBOX_MESSAGES (
+                                        MESSAGE_ID UUID PRIMARY KEY,
+                                        AGGREGATE_TYPE VARCHAR(50) NOT NULL,
+                                        AGGREGATE_ID VARCHAR(100) NOT NULL,
+                                        PAYLOAD TEXT NOT NULL,
+                                        STATUS VARCHAR(20) NOT NULL,
+                                        CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                        PROCESSED_AT TIMESTAMP NULL
+);
