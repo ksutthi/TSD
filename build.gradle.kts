@@ -59,6 +59,17 @@ dependencies {
     implementation("org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j")
     implementation("org.springframework.boot:spring-boot-starter-aop")
 
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-sqlserver")
+
+    // Spring Security
+    implementation("org.springframework.boot:spring-boot-starter-security")
+
+    // JWT (JSON Web Token) Libraries
+    implementation("io.jsonwebtoken:jjwt-api:0.12.5")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
+
     jooqGenerator("com.h2database:h2")
     jooqGenerator("org.jooq:jooq-meta-extensions:$jooqVersion")
 
