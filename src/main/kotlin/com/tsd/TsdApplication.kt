@@ -1,28 +1,19 @@
 package com.tsd
 
 import com.tsd.platform.engine.core.EnterpriseWorkflowEngine
-import kotlinx.coroutines.runBlocking // 🟢 1. IMPORT THIS
+import com.tsd.adapter.input.web.security.RegistrarParticipantDataIsolationSecurityConfig
+import kotlinx.coroutines.runBlocking
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.autoconfigure.domain.EntityScan
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories
-import org.springframework.web.client.RestTemplate
+import org.springframework.context.annotation.Import
 import org.springframework.scheduling.annotation.EnableScheduling
 
-@SpringBootApplication(scanBasePackages = ["com.tsd"])
-// Note: Since you have MultiDataSourceConfig, you technically don't need these two lines below
-// (the config file handles it), but keeping them is usually harmless if packages match.
-@EnableJpaRepositories(basePackages = ["com.tsd"])
-@EnableScheduling // 🟢 ADD THIS
-@EntityScan(basePackages = ["com.tsd"])
+@SpringBootApplication
+@EnableScheduling
+@Import(RegistrarParticipantDataIsolationSecurityConfig::class)
 class TsdApplication {
-
-    @Bean
-    fun restTemplate(): RestTemplate {
-        return RestTemplate()
-    }
 
     @Bean
     fun runner(engine: EnterpriseWorkflowEngine): CommandLineRunner {
@@ -32,7 +23,6 @@ class TsdApplication {
             println(" WAITING FOR SYNC: Workflow execution paused until platform files are ready.")
             println("------------------------------------------------------------\n")
 
-            // 🟢 2. FIX: Wrap the suspend function in runBlocking
             runBlocking {
                 try {
                     engine.executeWorkflow("TSD", "TSD-01")

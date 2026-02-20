@@ -1,5 +1,11 @@
+### ===================================================================
+### TSD PLATFORM: SECURITY & DATA ISOLATION TEST SUITE
+### Target Port: 8081 (To avoid the Zombie Server)
+### ===================================================================
+
 ### 🛑 TEST 14: The Unauthenticated Attack
-# Expected Result: 403 Forbidden (Because there is no token)
+# Expected Result (Security ON):  403 Forbidden
+# Expected Result (Security OFF): 200 OK
 POST http://localhost:8081/api/v1/portfolio/isolated-view
 Content-Type: application/json
 X-Participant-ID: 13
@@ -10,7 +16,8 @@ X-Participant-ID: 13
 
 
 ### ===================================================================
-
+### BROKER (KGI) SECURITY FLOW
+### ===================================================================
 
 ### 🔑 TEST 15: Login as KGI (Participant 13) to get JWT
 # Expected Result: 200 OK (Returns a JWT token with ROLE_BROKER)
@@ -18,11 +25,11 @@ POST http://localhost:8081/api/v1/auth/login/kgi
 
 
 ### ✅ TEST 16: The Broker Access Test (Passing the Shield)
-# Expected Result: 200 OK (Empty array `[]` is expected based on current DB data)
+# Expected Result: 200 OK (Returns 75,000 shares of PTT)
 # ⚠️ INSTRUCTION: Replace PASTE_YOUR_KGI_TOKEN_HERE with the token from Test 15
 POST http://localhost:8081/api/v1/portfolio/isolated-view
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJrZ2ktc3lzdGVtIiwicm9sZSI6IlJPTEVfQlJPS0VSIiwicGFydGljaXBhbnRfaWQiOjEzLCJpYXQiOjE3NzE1Nzk3NDYsImV4cCI6MTc3MTY2NjE0Nn0.xWHFNA2nVF7K-Bwm4ojDKrMqRaQtZjWO4gyjGPDee_Ju3VA8RSjl9vHAzAEtlVsm
+Authorization: Bearer PASTE_YOUR_KGI_TOKEN_HERE
 X-Participant-ID: 13
 
 {
@@ -32,10 +39,10 @@ X-Participant-ID: 13
 
 ### 🛑 TEST 17: The Hacker Attack (Broker tries to access Admin God-View)
 # Expected Result: 403 Forbidden (Because KGI is a BROKER, not an ADMIN)
-# ⚠️ INSTRUCTION: Use the same KGI token from Test 15
+# ⚠️ INSTRUCTION: Use the exact same KGI token from Test 15
 POST http://localhost:8081/api/v1/portfolio/god-view
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJrZ2ktc3lzdGVtIiwicm9sZSI6IlJPTEVfQlJPS0VSIiwicGFydGljaXBhbnRfaWQiOjEzLCJpYXQiOjE3NzE1Nzk3NDYsImV4cCI6MTc3MTY2NjE0Nn0.xWHFNA2nVF7K-Bwm4ojDKrMqRaQtZjWO4gyjGPDee_Ju3VA8RSjl9vHAzAEtlVsm
+Authorization: Bearer PASTE_YOUR_KGI_TOKEN_HERE
 
 {
   "ginId": 10006
@@ -43,7 +50,8 @@ Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJrZ2ktc3lzdGVtIiwicm9sZSI6I
 
 
 ### ===================================================================
-
+### TSD ADMIN SECURITY FLOW
+### ===================================================================
 
 ### 👑 TEST 18: Login as TSD Admin to get Admin JWT
 # Expected Result: 200 OK (Returns a JWT token with ROLE_TSD_ADMIN)
@@ -55,19 +63,7 @@ POST http://localhost:8081/api/v1/auth/login/admin
 # ⚠️ INSTRUCTION: Replace PASTE_YOUR_ADMIN_TOKEN_HERE with the token from Test 18
 POST http://localhost:8081/api/v1/portfolio/god-view
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJ0c2QtYWRtaW4iLCJyb2xlIjoiUk9MRV9UU0RfQURNSU4iLCJpYXQiOjE3NzE1Nzk4NTIsImV4cCI6MTc3MTY2NjI1Mn0.IOf7E4_ixnjsJejQrwHOpAj_X2HV8Ba1AC4bUtnaWy4UOUtMk5kfauGSb3mwfEH8
-
-{
-  "ginId": 10006
-}
-
-
-
-
-### TEST 14: The Unauthenticated Attack (SECURITY IS OFF)
-POST http://localhost:8081/api/v1/portfolio/isolated-view
-Content-Type: application/json
-X-Participant-ID: 13
+Authorization: Bearer PASTE_YOUR_ADMIN_TOKEN_HERE
 
 {
   "ginId": 10006
