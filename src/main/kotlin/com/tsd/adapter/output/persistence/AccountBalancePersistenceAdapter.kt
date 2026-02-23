@@ -2,7 +2,7 @@ package com.tsd.adapter.output.persistence
 
 import com.tsd.adapter.out.persistence.AccountBalanceJpaRepository
 import com.tsd.core.model.AggregatedPosition
-import com.tsd.core.port.out.AccountBalancePort
+import com.tsd.core.port.output.AccountBalancePort
 import jakarta.persistence.EntityManager
 import org.hibernate.Session
 import org.springframework.stereotype.Component

@@ -1,7 +1,7 @@
 package com.tsd.adapter.output.persistence
 
 import com.tsd.core.model.IdentityAttribute
-import com.tsd.core.port.out.IdentityAttributePort
+import com.tsd.core.port.output.IdentityAttributePort
 import org.springframework.stereotype.Component
 
 @Component

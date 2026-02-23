@@ -1,4 +1,4 @@
-package com.tsd.core.port.out
+package com.tsd.core.port.output
 
 import com.tsd.core.model.GlobalInvestorRegistry
 

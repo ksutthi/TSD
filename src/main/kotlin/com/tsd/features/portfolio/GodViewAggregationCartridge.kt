@@ -2,7 +2,7 @@ package com.tsd.features.portfolio
 
 import com.tsd.core.model.AggregatedPosition
 import com.tsd.core.model.GodViewQuery
-import com.tsd.core.port.out.AccountBalancePort
+import com.tsd.core.port.output.AccountBalancePort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 

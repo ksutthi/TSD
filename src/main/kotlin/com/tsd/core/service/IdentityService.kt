@@ -1,7 +1,7 @@
 package com.tsd.core.service
 
 import org.springframework.stereotype.Service
-import com.tsd.core.port.out.IdentityRepositoryPort
+import com.tsd.core.port.output.IdentityRepositoryPort
 import com.tsd.core.model.LinkResult
 
 @Service

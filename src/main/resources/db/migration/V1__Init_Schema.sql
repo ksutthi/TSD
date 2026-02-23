@@ -42,3 +42,18 @@ CREATE TABLE PUBLIC.OUTBOX_MESSAGES (
                                         CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                                         PROCESSED_AT TIMESTAMP NULL
 );
+
+
+-- 5. Corporate Action Job Table (The Maker-Checker Vault)
+CREATE TABLE CORPORATE_ACTION_JOB (
+                                      id UUID PRIMARY KEY,
+                                      job_id VARCHAR(255) NOT NULL UNIQUE,
+                                      transaction_type VARCHAR(255) NOT NULL,
+                                      status VARCHAR(50) NOT NULL,
+                                      current_state VARCHAR(255) NOT NULL,
+                                      maker_id VARCHAR(255) NOT NULL,
+                                      checker_id VARCHAR(255),
+                                      version BIGINT NOT NULL,              -- The Optimistic Lock column
+                                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                                      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);

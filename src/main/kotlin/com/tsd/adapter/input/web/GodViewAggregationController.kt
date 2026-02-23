@@ -2,7 +2,7 @@ package com.tsd.adapter.input.web
 
 import com.tsd.core.model.AggregatedPosition
 import com.tsd.core.model.GodViewQuery
-import com.tsd.core.port.out.AccountBalancePort
+import com.tsd.core.port.output.AccountBalancePort
 import com.tsd.features.portfolio.GodViewAggregationCartridge
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.Authentication

@@ -2,8 +2,8 @@ package com.tsd.features.identity
 
 import com.tsd.core.model.GlobalInvestorRegistry
 import com.tsd.core.model.IdentityAttribute
-import com.tsd.core.port.out.GlobalInvestorRegistryPort
-import com.tsd.core.port.out.IdentityAttributePort
+import com.tsd.core.port.output.GlobalInvestorRegistryPort
+import com.tsd.core.port.output.IdentityAttributePort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional

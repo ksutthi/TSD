@@ -1,7 +1,7 @@
 package com.tsd.adapter.output.persistence
 
 import com.tsd.core.model.LinkResult
-import com.tsd.core.port.out.IdentityRepositoryPort
+import com.tsd.core.port.output.IdentityRepositoryPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Component

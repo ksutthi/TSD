@@ -1,0 +1,50 @@
+### ==========================================
+### TEST 1: IDEMPOTENCY (The Double-Click Test)
+### ==========================================
+
+### 1A. Fire the first request (This will hang for 2 seconds)
+POST http://localhost:8081/api/v1/test/idempotency
+X-Idempotency-Key: my-secure-uuid-001
+
+### 1B. FIRE THIS IMMEDIATELY AFTER 1A (While 1A is still running)
+POST http://localhost:8081/api/v1/test/idempotency
+X-Idempotency-Key: my-secure-uuid-001
+
+# EXPECTED EVIDENCE for 1B: HTTP 409 Conflict.
+# "Duplicate Request. Transaction is currently IN_PROGRESS"
+
+
+### ==========================================
+### TEST 2: MAKER-CHECKER (The Vault Lock Test)
+### ==========================================
+
+### ==========================================
+### TEST 2: MAKER-CHECKER (The Vault Lock Test)
+### ==========================================
+
+### 2A. Initialize the Job (Look at the response to get your Job ID)
+POST http://localhost:8081/api/v1/test/maker-checker/init
+X-Idempotency-Key: init-job-002
+
+### 2B. Approve the Job (Admin 99)
+POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-9d146?checkerId=ADMIN_CHECKER_99
+X-Idempotency-Key: approve-job-admin-99
+
+### 2C. RACE CONDITION TEST (Admin 88)
+POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-9d146?checkerId=ADMIN_CHECKER_88
+X-Idempotency-Key: approve-job-admin-88
+
+### ==========================================
+### TEST 3: CIRCUIT BREAKER (The Outage Test)
+### ==========================================
+
+### 3A. Simulate Bank Outage (Click this 5 times rapidly)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=true
+
+# EXPECTED EVIDENCE for 3A: The first 5 will take time and return 500 Errors.
+
+### 3B. Check if the Circuit is OPEN (Click this after the 5 failures)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+
+# EXPECTED EVIDENCE for 3B: Even though fail is FALSE, the system refuses to hit the bank.
+# It instantly returns "Result: QUEUED_FOR_RETRY". The blast doors are closed.

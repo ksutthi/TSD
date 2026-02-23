@@ -1,6 +1,6 @@
 package com.tsd.core.service
 
-import com.tsd.core.port.out.IdentityRepositoryPort
+import com.tsd.core.port.output.IdentityRepositoryPort
 import kotlinx.coroutines.runBlocking
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
