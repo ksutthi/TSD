@@ -28,7 +28,7 @@ X-Idempotency-Key: init-job-002
 
 ### 2B. Approve the Job (Admin 99)
 POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-9d146?checkerId=ADMIN_CHECKER_99
-X-Idempotency-Key: approve-job-admin-99
+X-Idempotency-Key: approve/FAKE-JOB-123
 
 ### 2C. RACE CONDITION TEST (Admin 88)
 POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-9d146?checkerId=ADMIN_CHECKER_88
@@ -48,3 +48,6 @@ GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
 
 # EXPECTED EVIDENCE for 3B: Even though fail is FALSE, the system refuses to hit the bank.
 # It instantly returns "Result: QUEUED_FOR_RETRY". The blast doors are closed.
+
+### TEST 4: The Trace ID JSON Test
+GET http://localhost:8081/api/v1/test/crash

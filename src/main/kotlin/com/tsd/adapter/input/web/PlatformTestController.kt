@@ -60,4 +60,9 @@ class PlatformTestController(
         val result = externalBankAdapter.initiateTransfer("ACCT_123", 5000.0, fail)
         return ResponseEntity.ok("Result: $result")
     }
+
+    @GetMapping("/crash")
+    fun crash(): String {
+        throw RuntimeException("Simulated catastrophic database or memory failure")
+    }
 }

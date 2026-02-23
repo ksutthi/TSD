@@ -79,6 +79,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    // Add this new line:
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
 }
 
 kotlin {
