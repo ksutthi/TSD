@@ -7,7 +7,7 @@ import com.tsd.platform.spi.WorkflowEngine
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher
-import org.springframework.beans.factory.annotation.Qualifier // 🟢 NEW IMPORT
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -19,7 +19,6 @@ class WorkflowController(
     private val oneIdProxy: OneIdProxy,
     private val repository: WorkflowRepository,
     private val makerCheckerService: MakerCheckerWorkflowService,
-    // 🟢 FIXED: Tell Spring to use our new Async Launcher instead of the default blocking one!
     @Qualifier("asyncJobLauncher") private val jobLauncher: JobLauncher,
     private val universalEnterpriseBatchJob: Job
 ) {
@@ -65,6 +64,9 @@ class WorkflowController(
             "Event_Type"        to "Cash_Dividend",
             "Payment_Mode"      to (request.paymentMode ?: "Standard")
         )
+
+        // 🟢 NEW DEBUG LOG: Check exactly what Jackson parsed before hitting the Engine
+        println("   🐞 DEBUG PAYLOAD: Payment Mode is -> ${contextData["Payment_Mode"]}")
 
         // --- STEP 4: EXECUTION ---
         println("   🚀 Delegating to Engine (Job ID: $jobId)...")

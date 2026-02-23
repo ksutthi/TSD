@@ -1,0 +1,65 @@
+### ===================================================================
+### TSD ENTERPRISE ENGINE - LOCAL ENVIRONMENT TESTS
+### ===================================================================
+
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-HAPPY-001
+X-Idempotency-Key: idemp-happy-002
+
+{
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "paymentMode": "SWIFT"
+}
+
+
+### ===================================================================
+### 🌩️ CHAOS ENGINEERING (FAULT TOLERANCE TESTS)
+### ===================================================================
+
+### 2A. TURN ON CHAOS MONKEY (Break the External Network)
+# Forces the MockExternalController to return 500 Internal Server Errors
+POST http://localhost:8081/api/mock-external/chaos?down=true
+
+
+### 2B. SINGLE EXECUTION - NETWORK FAILURE & SAGA ROLLBACK
+# Run this AFTER turning on Chaos Monkey.
+# Watch the console for 3 retries, Circuit Breaker Fallback, and SAGA Compensation!
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-CHAOS-001
+X-Idempotency-Key: idemp-chaos-001
+
+{
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-002",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "paymentMode": "SWIFT"
+}
+
+
+### 2C. TURN OFF CHAOS MONKEY (Restore the Network)
+# Restores the MockExternalController to return 200 OK
+POST http://localhost:8081/api/mock-external/chaos?down=false
+
+
+### ===================================================================
+### 📦 HIGH-VOLUME BATCH PROCESSING
+### ===================================================================
+
+### 3. ASYNCHRONOUS UNIVERSAL BATCH EXECUTION (30 Records)
+# Tests the Spring Batch chunking mechanism. API should return in < 50ms.
+POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
+Content-Type: application/json
+X-Trace-Id: ASYNC-BATCH-001
+X-Idempotency-Key: batch-run-001

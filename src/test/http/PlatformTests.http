@@ -271,3 +271,94 @@ POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
 Content-Type: application/json
 X-Trace-Id: ASYNC-BATCH-9000
 X-Idempotency-Key: batch-async-run-002
+
+
+
+
+### 1. SINGLE EXECUTION - HAPPY PATH (SWIFT PAYMENT)
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-HAPPY-005
+X-Idempotency-Key: idemp-happy-005
+
+{
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "Payment_Mode": "SWIFT"
+}
+
+
+
+### 1. SINGLE EXECUTION - HAPPY PATH (SWIFT PAYMENT)
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-HAPPY-007
+X-Idempotency-Key: idemp-happy-007
+
+{
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "Payment_Mode": "SWIFT"
+}
+
+
+
+
+
+
+### ===================================================================
+### 🌩️ CHAOS ENGINEERING (FAULT TOLERANCE TESTS)
+### ===================================================================
+
+### 1. TURN ON CHAOS MONKEY (Break the External Network)
+# Forces the MockExternalController to return 500 Internal Server Errors
+POST http://localhost:8081/api/mock-external/chaos?down=true
+
+
+### 2. SINGLE EXECUTION - NETWORK FAILURE & SAGA ROLLBACK
+# Run this AFTER turning on Chaos Monkey.
+# Watch the console for the HTTP retries, the Circuit Breaker Fallback,
+# and the SAGA Compensation rollback kicking in!
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-CHAOS-001
+X-Idempotency-Key: idemp-chaos-001
+
+{
+  "registrar": "TSD",
+  "workflowId": "TSD-01",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "Payment_Mode": "SWIFT"
+}
+
+
+### 3. TURN OFF CHAOS MONKEY (Restore the Network)
+# Restores the MockExternalController to return 200 OK so you can run normal tests again
+POST http://localhost:8081/api/mock-external/chaos?down=false
+
+### 3. ASYNCHRONOUS UNIVERSAL BATCH EXECUTION (30 Records)
+POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
+Content-Type: application/json
+X-Trace-Id: ASYNC-BATCH-002
+X-Idempotency-Key: batch-run-002
+
+
+### 3. ASYNCHRONOUS UNIVERSAL BATCH EXECUTION (30 Records)
+POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
+Content-Type: application/json
+X-Trace-Id: ASYNC-BATCH-004
+X-Idempotency-Key: batch-run-004

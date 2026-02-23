@@ -269,7 +269,6 @@ class EnterpriseWorkflowEngine(
         } catch (_: Exception) { return false } // 🟢 FIXED: Used '_' for unused exception variable
         return true
     }
-
     private fun runCartridge(rule: MatrixRule, packet: ExchangePacket, context: KernelContext) {
         val cartridge = cartridgeMap[rule.cartridgeId]
         val stepCode = "[${rule.moduleId}-${rule.slotId}]"
@@ -277,11 +276,22 @@ class EnterpriseWorkflowEngine(
         if (cartridge != null) {
             try {
                 context.set("STEP_PREFIX", stepCode)
-                if (rule.configJson.isNotBlank() && rule.configJson != "{}") {
+
+                // 🟢 1. Clean up the CSV formatting artifacts
+                val cleanJson = rule.configJson.trim()
+                    .removeSurrounding("\"")
+                    .removeSurrounding("'")
+                    .replace("\"\"", "\"")
+                    .trim()
+
+                // 🟢 2. THE ULTIMATE FIX: Only parse if it actually contains a key-value pair (a colon)!
+                if (cleanJson.contains(":")) {
                     try {
-                        val configMap = objectMapper.readValue(rule.configJson, Map::class.java)
+                        val configMap = objectMapper.readValue(cleanJson, Map::class.java)
                         configMap.forEach { (k, v) -> if (k!=null && v!=null) context.set(k.toString(), v) }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        println(EngineAnsi.RED + "      ❌ [JSON Parse Error] Failed to parse rule config! Reason: ${e.message}" + EngineAnsi.RESET)
+                    }
                 }
 
                 cartridge.execute(packet, context)
