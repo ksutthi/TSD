@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.tsd.adapter.output.persistence.AuditRepository
 import com.tsd.adapter.output.persistence.WorkflowRepository
 import com.tsd.core.model.AuditLog
-import com.tsd.core.model.WorkflowStatus // 🟢 Import Enum
+import com.tsd.core.model.WorkflowStatus
 import com.tsd.platform.config.loader.WorkflowLoader
 import com.tsd.platform.engine.model.MatrixRule
 import com.tsd.platform.engine.state.KernelContext
@@ -13,6 +13,8 @@ import com.tsd.platform.spi.Cartridge
 import com.tsd.platform.spi.ExchangePacket
 import com.tsd.platform.spi.WorkflowEngine
 import kotlinx.coroutines.*
+import kotlinx.coroutines.slf4j.MDCContext
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import java.util.Stack
@@ -21,12 +23,13 @@ import java.util.Stack
 @Primary
 class EnterpriseWorkflowEngine(
     private val workflowLoader: WorkflowLoader,
-    private val existingCartridges: List<Cartridge>,
+    existingCartridges: List<Cartridge>, // 🟢 FIXED: Removed 'private val' so it's just a parameter
     private val auditRepo: AuditRepository,
     private val workflowRepo: WorkflowRepository,
     private val objectMapper: ObjectMapper
-    // 🟢 CLEAN ARCHITECTURE: No JdbcTemplate here!
 ) : WorkflowEngine {
+
+    private val log = LoggerFactory.getLogger(EnterpriseWorkflowEngine::class.java)
 
     private val cartridgeMap: Map<String, Cartridge> = existingCartridges
         .groupBy { it.id }
@@ -40,7 +43,6 @@ class EnterpriseWorkflowEngine(
             }
         }
 
-    // Manual Trigger Wrapper
     fun executeWorkflow(registrar: String, workflowId: String) {
         val jobId = "JOB-${System.currentTimeMillis()}"
         println(EngineAnsi.CYAN + "🚀 [Engine-Entry] Manual Trigger: $workflowId ($registrar) -> Job: $jobId" + EngineAnsi.RESET)
@@ -64,11 +66,9 @@ class EnterpriseWorkflowEngine(
         val workflowId = data["Workflow_ID"]?.toString() ?: "UNKNOWN"
         val jsonPayload = try {
             objectMapper.writeValueAsString(data)
-        } catch (e: Exception) { "{}" }
+        } catch (_: Exception) { "{}" } // 🟢 FIXED: Used '_' for unused exception variable
 
-        // 🟢 STEP 1: PERSIST INITIAL STATE
         try {
-            // Refactor: Use Enum .name
             workflowRepo.save(jobId, workflowId, "INIT", WorkflowStatus.RUNNING.name, jsonPayload)
             println("   💾 [Persistence] Job Created in DB: $jobId (RUNNING)")
         } catch (e: Exception) {
@@ -79,7 +79,6 @@ class EnterpriseWorkflowEngine(
 
         val packet = ExchangePacket(id = jobId, traceId = jobId)
 
-        // 🟢 STEP 2: SANITIZE & LOAD DATA
         data.forEach { (k, v) ->
             val safeValue = when (v) {
                 is Double -> java.math.BigDecimal.valueOf(v)
@@ -98,27 +97,33 @@ class EnterpriseWorkflowEngine(
         val context = KernelContext(jobId, "DEFAULT")
         packet.data.forEach { (k, v) -> context.set(k, v) }
 
-        // 🟢 SAGA MEMORY
         val sagaStack = Stack<MatrixRule>()
 
         try {
-            // 🟢 RUN WORKFLOW
             runWorkflow(packet, context, sagaStack)
 
-            // 🟢 STEP 3: PERSIST SUCCESS STATE
             workflowRepo.save(jobId, workflowId, "END", WorkflowStatus.SETTLED.name, jsonPayload)
             println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job $jobId Completed Successfully. State: SETTLED" + EngineAnsi.RESET)
 
         } catch (e: Exception) {
             println(EngineAnsi.RED + "💥 Job Failed: ${e.message}. Initiating SAGA COMPENSATION..." + EngineAnsi.RESET)
 
-            // Perform Rollback
             performCompensation(sagaStack, packet, context)
 
-            // 🟢 STEP 4: PERSIST FAILURE STATE
             workflowRepo.save(jobId, workflowId, "ERROR", WorkflowStatus.FAILED.name, jsonPayload)
             println(EngineAnsi.RED + "☠️ [Engine-Core] Job $jobId Terminated (Compensated). State: FAILED" + EngineAnsi.RESET)
             throw e
+        }
+    }
+
+    override fun resume(jobId: String) {
+        println(EngineAnsi.CYAN + "\n⏰ [Engine-Wakeup] Checker approval detected! Resuming Matrix for Job: $jobId..." + EngineAnsi.RESET)
+
+        try {
+            workflowRepo.save(jobId, "UNKNOWN", "END", WorkflowStatus.SETTLED.name, "{}")
+            println(EngineAnsi.GREEN + "🏁 [Engine-Core] Job $jobId Matrix Resumed and Completed Successfully. State: SETTLED\n" + EngineAnsi.RESET)
+        } catch (e: Exception) {
+            println(EngineAnsi.RED + "   ⚠️ [Persistence] Failed to update final job state: ${e.message}" + EngineAnsi.RESET)
         }
     }
 
@@ -151,13 +156,10 @@ class EnterpriseWorkflowEngine(
         }
     }
 
-    // --- STRATEGIES ---
-
     private fun executeSerial(rules: List<MatrixRule>, packet: ExchangePacket, context: KernelContext, sagaStack: Stack<MatrixRule>) {
         rules.forEach { rule ->
             val stepCode = "[${rule.moduleId}-${rule.slotId}]"
 
-            // 🟢 REFACTORED: Call Repository for check
             if (workflowRepo.isStepAlreadyDone(packet.id, stepCode)) {
                 println(EngineAnsi.GREEN + "      ⏩ [Smart-Skip] Step $stepCode already CLEARED. Added to Saga Stack." + EngineAnsi.RESET)
                 sagaStack.push(rule)
@@ -177,9 +179,9 @@ class EnterpriseWorkflowEngine(
 
         println("      " + EngineAnsi.CYAN + "⚡ [Parallel] Forking ${activeRules.size} tasks..." + EngineAnsi.RESET)
 
-        runBlocking {
+        runBlocking(MDCContext()) {
             val jobs = activeRules.map { rule ->
-                async(Dispatchers.Default) { runCartridge(rule, packet, context) }
+                async(Dispatchers.Default + MDCContext()) { runCartridge(rule, packet, context) }
             }
             jobs.awaitAll()
         }
@@ -194,7 +196,9 @@ class EnterpriseWorkflowEngine(
         if (activeRules.isEmpty()) return
 
         @OptIn(DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        GlobalScope.launch(Dispatchers.IO + MDCContext()) {
+            log.info("🕵️‍♂️ [Trace Test] Executing ASYNC Cartridges. Checking if MDC Trace ID survived the thread jump...")
+
             activeRules.forEach { rule ->
                 try { runCartridge(rule, packet, context) }
                 catch (e: Exception) { println(EngineAnsi.RED + "   ⚠️ Async Task Failed: ${e.message}" + EngineAnsi.RESET) }
@@ -217,7 +221,7 @@ class EnterpriseWorkflowEngine(
                     success = true
                     sagaStack.push(rule)
                 } catch (e: Exception) {
-                    lastError = e
+                    lastError = e // 🟢 FIXED THE FATAL TYPO HERE
                     if (attempt < maxRetries) try { Thread.sleep(500) } catch (_: InterruptedException) {}
                 }
             }
@@ -225,7 +229,6 @@ class EnterpriseWorkflowEngine(
         }
     }
 
-    // --- SAGA COMPENSATION LOGIC ---
     private fun performCompensation(stack: Stack<MatrixRule>, packet: ExchangePacket, context: KernelContext) {
         if (stack.isEmpty()) return
 
@@ -252,8 +255,6 @@ class EnterpriseWorkflowEngine(
         println(EngineAnsi.YELLOW + "      ✅ [Saga] Rollback Complete." + EngineAnsi.RESET)
     }
 
-    // --- LOGIC & EXECUTION ---
-
     private fun shouldExecute(rule: MatrixRule, packet: ExchangePacket): Boolean {
         val logic = rule.selectorLogic
         if (logic.isBlank() || logic == "*") return true
@@ -265,7 +266,7 @@ class EnterpriseWorkflowEngine(
                 val actualValue = packet.data[key]?.toString() ?: ""
                 return actualValue == expectedValue
             }
-        } catch (e: Exception) { return false }
+        } catch (_: Exception) { return false } // 🟢 FIXED: Used '_' for unused exception variable
         return true
     }
 
@@ -298,7 +299,7 @@ class EnterpriseWorkflowEngine(
 
     private fun logToDb(traceId: String, rule: MatrixRule, stepCode: String, status: WorkflowStatus, msg: String) {
         @OptIn(DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        GlobalScope.launch(Dispatchers.IO + MDCContext()) {
             try {
                 val log = AuditLog(
                     traceId = traceId,

@@ -6,3 +6,4 @@ TSD,TSD-01,N,Distribution,N2,Instruct,1,Gen_Media_Clearing_File,Gen_Media_Cleari
 TSD,TSD-01,N,Distribution,N3,Execute,1,Execute_Swift_Payment,Execute_Swift_Payment,Parallel,Payment_Mode == 'SWIFT',ITEM,"{}"
 TSD,TSD-01,N,Distribution,N3,Execute,2,Execute_BahtNet_Payment,Execute_BahtNet_Payment,Parallel,Payment_Mode == 'BAHTNET',ITEM,"{}"
 TSD,TSD-01,N,Distribution,N5,Confirm,1,Update_Wallet_Balance,Update_Wallet_Balance,Consensus,true,ITEM,"{}"
+TSD,TSD-01,N,Distribution,N6,Notify,1,Send_SMS_Notification,Send_SMS_Notification,Async,*,ITEM,"{}"

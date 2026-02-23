@@ -51,3 +51,204 @@ GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
 
 ### TEST 4: The Trace ID JSON Test
 GET http://localhost:8081/api/v1/test/crash
+
+
+
+
+### ===================================================================
+### TSD REGISTRY PLATFORM - LOCAL MOCK IDENTITY TESTS
+### ===================================================================
+
+### 1. Test as HEAD OF OPERATIONS (High Approval Limit)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: ops-admin-01
+X-Mock-FullName: Sarah Jenkins
+X-Mock-Role: HEAD_OF_OPERATIONS
+X-Mock-Broker: TSD_INTERNAL
+X-Mock-Limit: 55000000.00
+Accept: application/json
+
+###
+
+### 2. Test as BROKER MAKER (Initiates Transfers)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: broker-maker-99
+X-Mock-FullName: Somchai Trader
+X-Mock-Role: MAKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 5000000.00
+Accept: application/json
+
+###
+
+### 3. Test as BROKER CHECKER (Approves Transfers)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: broker-checker-42
+X-Mock-FullName: Naree Approver
+X-Mock-Role: CHECKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 10000000.00
+Accept: application/json
+
+###
+
+### 4. Test as EXTERNAL SYSTEM (Batch Processor)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: sys-batch-eod
+X-Mock-FullName: EOD Batch Processor
+X-Mock-Role: SYSTEM
+X-Mock-Broker: SYSTEM
+X-Mock-Limit: 999999999.00
+Accept: application/json
+
+
+
+
+### ===================================================================
+### TSD REGISTRY PLATFORM - LOCAL MOCK IDENTITY TESTS
+### ===================================================================
+
+### 1. Test as TSD HEAD OF OPERATIONS (High Approval Limit)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: ops-admin-01
+X-Mock-FullName: Sarah Jenkins
+X-Mock-Role: HEAD_OF_OPERATIONS
+X-Mock-Broker: TSD_INTERNAL
+X-Mock-Limit: 55000000.00
+Accept: application/json
+
+###
+
+### 2. Test as BROKER MAKER (Initiates Transfers)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: broker-maker-99
+X-Mock-FullName: Somchai Trader
+X-Mock-Role: MAKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 5000000.00
+Accept: application/json
+
+###
+
+### 3. Test as BROKER CHECKER (Approves Transfers)
+GET http://localhost:8081/api/v1/test/circuit-breaker?fail=false
+X-Mock-User: broker-checker-42
+X-Mock-FullName: Naree Approver
+X-Mock-Role: CHECKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 10000000.00
+Accept: application/json
+
+
+
+
+### ===================================================================
+### TSD REGISTRY PLATFORM - POLICY ENGINE TESTS
+### ===================================================================
+
+### 1. Test Maker UNDER limit (Should Succeed)
+GET http://localhost:8081/api/v1/test/policy/transfer?amount=4000000
+X-Mock-User: broker-maker-99
+X-Mock-FullName: Somchai Trader
+X-Mock-Role: MAKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 5000000.00
+Accept: application/json
+
+###
+
+### 2. Test Maker OVER limit (Should Fail - 403 Forbidden)
+GET http://localhost:8081/api/v1/test/policy/transfer?amount=8000000
+X-Mock-User: broker-maker-99
+X-Mock-FullName: Somchai Trader
+X-Mock-Role: MAKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 5000000.00
+Accept: application/json
+
+
+### ===================================================================
+### TSD REGISTRY PLATFORM - END-TO-END MAKER/CHECKER TEST
+### ===================================================================
+
+### 1. Checker Approves the Job (Using Secure Context)
+POST http://localhost:8081/api/v1/workflows/JOB-1771823394109/approve
+X-Mock-User: broker-checker-42
+X-Mock-FullName: Naree Approver
+X-Mock-Role: CHECKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 10000000.00
+Accept: application/json
+
+###
+
+### 2. Unauthorized Approval Attempt (Should Fail - 403 Forbidden)
+POST http://localhost:8081/api/v1/workflows/JOB-1771823394109/approve
+X-Mock-User: broker-maker-99
+X-Mock-FullName: Somchai Trader
+X-Mock-Role: MAKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 5000000.00
+Accept: application/json
+
+
+
+
+### Create a Dummy Job (With Idempotency Key)
+POST http://localhost:8081/api/v1/test/maker-checker/init
+X-Idempotency-Key: init-job-12345
+
+
+### Approve the Job as a CHECKER (With Mock Security & Idempotency)
+POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-98b7e
+X-Idempotency-Key: approve-job-98b7e
+X-Mock-User: broker-checker-42
+X-Mock-FullName: Naree Approver
+X-Mock-Role: CHECKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 10000000.00
+Accept: application/json
+
+
+
+### ===================================================================
+### THE FINAL TEST: APPROVAL + ENGINE WAKE-UP
+### ===================================================================
+
+### 1. Create a Dummy Job
+POST http://localhost:8081/api/v1/test/maker-checker/init
+X-Idempotency-Key: init-job-wakeup-test-2
+
+
+### 2. Approve the Job (Should trigger ⏰ Engine-Wakeup)
+POST http://localhost:8081/api/v1/test/maker-checker/approve/TEST-JOB-67296
+X-Idempotency-Key: approve-job-wakeup-test-2
+X-Mock-User: broker-checker-42
+X-Mock-FullName: Naree Approver
+X-Mock-Role: CHECKER
+X-Mock-Broker: KGI_001
+X-Mock-Limit: 10000000.00
+Accept: application/json
+
+
+
+### ===================================================================
+### TRACE ID COROUTINE TEST
+### ===================================================================
+
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Trace-Id: TRACE-JUMP-9999
+X-Idempotency-Key: trace-test-003
+
+{
+  "transactionId": "TXN-TRACE-003",
+  "workflowId": "TSD-01",
+  "registrar": "TSD",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "paymentMode": "Standard"
+}

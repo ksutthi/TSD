@@ -3,6 +3,7 @@ package com.tsd.adapter.input.web
 import com.tsd.adapter.output.identity.OneIdProxy
 import com.tsd.adapter.output.persistence.WorkflowRepository
 import com.tsd.platform.spi.WorkflowEngine
+import com.tsd.core.service.MakerCheckerWorkflowService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -12,7 +13,8 @@ import java.util.UUID
 class WorkflowController(
     private val engine: WorkflowEngine,
     private val oneIdProxy: OneIdProxy,
-    private val repository: WorkflowRepository
+    private val repository: WorkflowRepository,
+    private val makerCheckerService: MakerCheckerWorkflowService // 🛡️ NEW: Injected your secure service!
 ) {
 
     @PostMapping("/execute")
@@ -20,7 +22,7 @@ class WorkflowController(
         val displayId = request.transactionId ?: "NEW_REQ"
         println("\n📥 API REQUEST RECEIVED: Workflow=${request.workflowId}, Txn=$displayId, Amount=${request.amount} THB")
 
-        // --- STEP 1: SECURITY CHECK ---
+        // --- STEP 1: SECURITY CHECK (Legacy Placeholder) ---
         val userId = "admin"
         if (!oneIdProxy.checkAccess(userId)) {
             println("⛔ SECURITY BLOCK: Workflow aborted for user $userId")
@@ -30,13 +32,9 @@ class WorkflowController(
             ))
         }
 
-        // --- STEP 2: IDEMPOTENCY CHECK (Fixed Strategy) ---
-        // 1. Determine the Unique Job ID (Transaction ID)
-        // If the user sends a transactionId, we use it. If not, we generate a random one.
+        // --- STEP 2: IDEMPOTENCY CHECK ---
         val jobId = request.transactionId ?: "API-${UUID.randomUUID().toString().substring(0, 8)}"
 
-        // 2. Check if THIS SPECIFIC TRANSACTION has been processed
-        // (We no longer block the whole 'TSD-01' template, only this specific instance)
         if (repository.findStatus(jobId) != null) {
             println("♻️ [Idempotency] Rejecting duplicate Transaction ID: $jobId")
             return ResponseEntity.status(409).body(mapOf(
@@ -50,7 +48,7 @@ class WorkflowController(
         // --- STEP 3: CONTEXT PREPARATION ---
         val contextData = mapOf(
             "Registrar_Code"    to request.registrar,
-            "Workflow_ID"       to request.workflowId, // This finds the Rules (e.g. "TSD-01")
+            "Workflow_ID"       to request.workflowId,
             "Request_Ref"       to jobId,
             "AMOUNT"            to request.amount,
             "CURRENCY"          to request.currency,
@@ -58,8 +56,6 @@ class WorkflowController(
             "WALLET_ID"         to request.walletId,
             "TARGET_BANK"       to request.targetBank,
             "Event_Type"        to "Cash_Dividend",
-
-            // 🟢 Support for Conditional Logic (e.g. "BAHTNET" path)
             "Payment_Mode"      to (request.paymentMode ?: "Standard")
         )
 
@@ -90,10 +86,35 @@ class WorkflowController(
             ResponseEntity.status(404).body(mapOf("error" to "Job Not Found"))
         }
     }
-    // 🧪 CHAOS TOOL: Toggle the Identity Service Health
+
     @PostMapping("/chaos/toggle-identity")
     fun toggleIdentityChaos(@RequestParam down: Boolean): ResponseEntity<String> {
         oneIdProxy.forceSystemDown = down
         return ResponseEntity.ok("💥 Identity Service Down = $down")
+    }
+
+    // =========================================================================
+    // 🛡️ SECURE MAKER/CHECKER ENDPOINTS
+    // =========================================================================
+
+    @PostMapping("/{jobId}/approve")
+    fun approveJob(@PathVariable jobId: String): ResponseEntity<Map<String, String>> {
+        // Notice we do NOT ask the UI who the user is!
+        makerCheckerService.approveJob(jobId)
+
+        return ResponseEntity.ok(mapOf(
+            "status" to "Success",
+            "message" to "Job $jobId successfully approved."
+        ))
+    }
+
+    @PostMapping("/{jobId}/reject")
+    fun rejectJob(@PathVariable jobId: String): ResponseEntity<Map<String, String>> {
+        makerCheckerService.rejectJob(jobId)
+
+        return ResponseEntity.ok(mapOf(
+            "status" to "Success",
+            "message" to "Job $jobId successfully rejected."
+        ))
     }
 }

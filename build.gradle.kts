@@ -82,6 +82,12 @@ dependencies {
     // Add this new line:
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-tracing-bridge-brave")
+
+    // Externalize Identity Management, Risk Engine and Policy Matrix
+    implementation("org.springframework.boot:spring-boot-starter-security")
+
+    // 🟢 Teaches Coroutines how to carry the Trace ID across threads
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j")
 }
 
 kotlin {

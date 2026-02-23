@@ -21,9 +21,7 @@ class PlatformTestController(
     // ==========================================
     @PostMapping("/idempotency")
     fun testIdempotency(): ResponseEntity<String> {
-        // If the interceptor works, sending the same X-Idempotency-Key twice
-        // will NEVER reach this line of code on the second attempt.
-        Thread.sleep(2000) // Simulate slow processing to make it easy to double-click
+        Thread.sleep(2000)
         return ResponseEntity.ok("SUCCESS: Business logic executed once.")
     }
 
@@ -32,7 +30,6 @@ class PlatformTestController(
     // ==========================================
     @PostMapping("/maker-checker/init")
     fun initJob(): ResponseEntity<String> {
-        // Creates a dummy job in PENDING_REVIEW state so we can test approvals
         val job = CorporateActionJob(
             jobId = "TEST-JOB-${UUID.randomUUID().toString().take(5)}",
             transactionType = "DIVIDEND_PAYOUT",
@@ -44,9 +41,10 @@ class PlatformTestController(
         return ResponseEntity.ok("Created Job: ${job.jobId} at Version 0")
     }
 
+    // 🛡️ SECURITY FIX: Removed '@RequestParam checkerId'. The engine extracts it automatically!
     @PostMapping("/maker-checker/approve/{jobId}")
-    fun approveJob(@PathVariable jobId: String, @RequestParam checkerId: String): ResponseEntity<String> {
-        makerCheckerService.approveJob(jobId, checkerId)
+    fun approveJob(@PathVariable jobId: String): ResponseEntity<String> {
+        makerCheckerService.approveJob(jobId) // ✅ Now only passes the jobId
         val updatedJob = jobRepository.findByJobId(jobId)
         return ResponseEntity.ok("Approved! New Database Version is: ${updatedJob?.version}")
     }
@@ -56,7 +54,6 @@ class PlatformTestController(
     // ==========================================
     @GetMapping("/circuit-breaker")
     fun testCircuitBreaker(@RequestParam fail: Boolean): ResponseEntity<String> {
-        // We are now passing the 'fail' parameter correctly!
         val result = externalBankAdapter.initiateTransfer("ACCT_123", 5000.0, fail)
         return ResponseEntity.ok("Result: $result")
     }
@@ -66,3 +63,6 @@ class PlatformTestController(
         throw RuntimeException("Simulated catastrophic database or memory failure")
     }
 }
+
+
+
