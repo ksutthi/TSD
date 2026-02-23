@@ -252,3 +252,22 @@ X-Idempotency-Key: trace-test-003
   "targetBank": "BBL_TH",
   "paymentMode": "Standard"
 }
+
+
+### ===================================================================
+### TRIGGER UNIVERSAL BATCH (30 Records)
+### ===================================================================
+POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
+Content-Type: application/json
+X-Trace-Id: BATCH-TRACE-999
+X-Idempotency-Key: batch-run-001
+
+
+
+### ===================================================================
+### FIRE-AND-FORGET ASYNC BATCH TEST (30 Records)
+### ===================================================================
+POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
+Content-Type: application/json
+X-Trace-Id: ASYNC-BATCH-9000
+X-Idempotency-Key: batch-async-run-002

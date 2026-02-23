@@ -2,8 +2,12 @@ package com.tsd.adapter.input.web
 
 import com.tsd.adapter.output.identity.OneIdProxy
 import com.tsd.adapter.output.persistence.WorkflowRepository
-import com.tsd.platform.spi.WorkflowEngine
 import com.tsd.core.service.MakerCheckerWorkflowService
+import com.tsd.platform.spi.WorkflowEngine
+import org.springframework.batch.core.Job
+import org.springframework.batch.core.JobParametersBuilder
+import org.springframework.batch.core.launch.JobLauncher
+import org.springframework.beans.factory.annotation.Qualifier // 🟢 NEW IMPORT
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -14,7 +18,10 @@ class WorkflowController(
     private val engine: WorkflowEngine,
     private val oneIdProxy: OneIdProxy,
     private val repository: WorkflowRepository,
-    private val makerCheckerService: MakerCheckerWorkflowService // 🛡️ NEW: Injected your secure service!
+    private val makerCheckerService: MakerCheckerWorkflowService,
+    // 🟢 FIXED: Tell Spring to use our new Async Launcher instead of the default blocking one!
+    @Qualifier("asyncJobLauncher") private val jobLauncher: JobLauncher,
+    private val universalEnterpriseBatchJob: Job
 ) {
 
     @PostMapping("/execute")
@@ -99,9 +106,7 @@ class WorkflowController(
 
     @PostMapping("/{jobId}/approve")
     fun approveJob(@PathVariable jobId: String): ResponseEntity<Map<String, String>> {
-        // Notice we do NOT ask the UI who the user is!
         makerCheckerService.approveJob(jobId)
-
         return ResponseEntity.ok(mapOf(
             "status" to "Success",
             "message" to "Job $jobId successfully approved."
@@ -111,10 +116,40 @@ class WorkflowController(
     @PostMapping("/{jobId}/reject")
     fun rejectJob(@PathVariable jobId: String): ResponseEntity<Map<String, String>> {
         makerCheckerService.rejectJob(jobId)
-
         return ResponseEntity.ok(mapOf(
             "status" to "Success",
             "message" to "Job $jobId successfully rejected."
+        ))
+    }
+
+    // =========================================================================
+    // 📦 HIGH-VOLUME BATCH ENDPOINTS
+    // =========================================================================
+
+    @PostMapping("/batch/{registrar}/{workflowId}")
+    fun triggerUniversalBatch(
+        @PathVariable registrar: String,
+        @PathVariable workflowId: String,
+        @RequestParam(defaultValue = "100") records: Long
+    ): ResponseEntity<Map<String, String>> {
+
+        println("\n🚀 [WorkflowController] Triggering Universal Batch for $registrar / $workflowId ($records records)...")
+
+        // Pass the dynamic routing logic to the Spring Batch Job
+        val params = JobParametersBuilder()
+            .addString("registrar", registrar)
+            .addString("workflowId", workflowId)
+            .addLong("record_count", records)
+            .addLong("timestamp", System.currentTimeMillis())
+            .toJobParameters()
+
+        val execution = jobLauncher.run(universalEnterpriseBatchJob, params)
+
+        return ResponseEntity.ok(mapOf(
+            "status" to "Batch Job Submitted",
+            "batch_execution_id" to execution.jobId.toString(),
+            "workflow_routed" to workflowId,
+            "batch_status" to execution.status.name
         ))
     }
 }
