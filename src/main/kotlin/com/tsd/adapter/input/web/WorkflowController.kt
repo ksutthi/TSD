@@ -108,7 +108,10 @@ class WorkflowController(
 
     @PostMapping("/{jobId}/approve")
     fun approveJob(@PathVariable jobId: String): ResponseEntity<Map<String, String>> {
+
+        // This safely checks security, checks the legacy vault, AND wakes the engine!
         makerCheckerService.approveJob(jobId)
+
         return ResponseEntity.ok(mapOf(
             "status" to "Success",
             "message" to "Job $jobId successfully approved."

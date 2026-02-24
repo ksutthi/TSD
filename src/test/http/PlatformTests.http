@@ -362,3 +362,53 @@ POST http://localhost:8081/api/v1/workflows/batch/TSD/TSD-01?records=30
 Content-Type: application/json
 X-Trace-Id: ASYNC-BATCH-004
 X-Idempotency-Key: batch-run-004
+
+### 3. ASYNCHRONOUS UNIVERSAL BATCH EXECUTION (30 Records)
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Idempotency-Key: start-new-job-001
+
+{
+  "workflowId": "TSD-01",
+  "registrar": "TSD",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "paymentMode": "Standard"
+}
+
+### 3. ASYNCHRONOUS UNIVERSAL BATCH EXECUTION (30 Records)
+POST http://localhost:8081/api/v1/workflows/API-25997f3e/approve
+Content-Type: application/json
+X-Idempotency-Key: checker-approve-25997f3e
+
+
+
+
+### 1. The Maker (Trigger the Workflow)
+# Run this first. Look at the console or the response JSON to get the generated JOB-XXX ID.
+POST http://localhost:8081/api/v1/workflows/execute
+Content-Type: application/json
+X-Idempotency-Key: matrix-maker-test-004
+
+{
+  "workflowId": "TSD-01",
+  "registrar": "TSD",
+  "amount": 50000.00,
+  "currency": "THB",
+  "investorId": "ACCT-001",
+  "walletId": "W-998877",
+  "targetBank": "BBL_TH",
+  "paymentMode": "Standard"
+}
+
+### 2. The Checker (Wake up the Engine) - THE GOLDEN TICKET
+# Don't forget to replace the ID with a fresh one from the Maker!
+POST http://localhost:8081/api/v1/workflows/API-c24250b8/approve
+Content-Type: application/json
+X-Idempotency-Key: matrix-checker-test-004
+X-Mock-User: admin_checker
+X-Mock-Role: CHECKER
+X-Mock-Limit: 99999999

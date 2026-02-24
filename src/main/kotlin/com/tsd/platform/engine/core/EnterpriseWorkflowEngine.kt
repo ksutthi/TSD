@@ -1,10 +1,10 @@
 package com.tsd.platform.engine.core
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.tsd.adapter.output.persistence.AuditRepository
-import com.tsd.adapter.output.persistence.WorkflowRepository
 import com.tsd.core.model.AuditLog
 import com.tsd.core.model.WorkflowStatus
+import com.tsd.core.port.output.AuditLogPort
+import com.tsd.core.port.output.WorkflowStatePort
 import com.tsd.platform.config.loader.WorkflowLoader
 import com.tsd.platform.engine.model.MatrixRule
 import com.tsd.platform.engine.state.KernelContext
@@ -23,9 +23,9 @@ import java.util.Stack
 @Primary
 class EnterpriseWorkflowEngine(
     private val workflowLoader: WorkflowLoader,
-    existingCartridges: List<Cartridge>, // 🟢 FIXED: Removed 'private val' so it's just a parameter
-    private val auditRepo: AuditRepository,
-    private val workflowRepo: WorkflowRepository,
+    existingCartridges: List<Cartridge>,
+    private val auditRepo: AuditLogPort,       // 🟢 HEXAGONAL FIX: Using Port instead of Adapter
+    private val workflowRepo: WorkflowStatePort, // 🟢 HEXAGONAL FIX: Using Port instead of Adapter
     private val objectMapper: ObjectMapper
 ) : WorkflowEngine {
 
@@ -66,7 +66,7 @@ class EnterpriseWorkflowEngine(
         val workflowId = data["Workflow_ID"]?.toString() ?: "UNKNOWN"
         val jsonPayload = try {
             objectMapper.writeValueAsString(data)
-        } catch (_: Exception) { "{}" } // 🟢 FIXED: Used '_' for unused exception variable
+        } catch (_: Exception) { "{}" }
 
         try {
             workflowRepo.save(jobId, workflowId, "INIT", WorkflowStatus.RUNNING.name, jsonPayload)
@@ -104,6 +104,10 @@ class EnterpriseWorkflowEngine(
 
             workflowRepo.save(jobId, workflowId, "END", WorkflowStatus.SETTLED.name, jsonPayload)
             println(EngineAnsi.CYAN + "🏁 [Engine-Core] Job $jobId Completed Successfully. State: SETTLED" + EngineAnsi.RESET)
+
+        } catch (e: WorkflowSuspendedException) {
+            workflowRepo.save(jobId, workflowId, "PAUSED", "PENDING_APPROVAL", jsonPayload)
+            println(EngineAnsi.YELLOW + "⏸️ [Engine-Core] Job $jobId Suspended safely. State: PENDING_APPROVAL" + EngineAnsi.RESET)
 
         } catch (e: Exception) {
             println(EngineAnsi.RED + "💥 Job Failed: ${e.message}. Initiating SAGA COMPENSATION..." + EngineAnsi.RESET)
@@ -221,7 +225,7 @@ class EnterpriseWorkflowEngine(
                     success = true
                     sagaStack.push(rule)
                 } catch (e: Exception) {
-                    lastError = e // 🟢 FIXED THE FATAL TYPO HERE
+                    lastError = e
                     if (attempt < maxRetries) try { Thread.sleep(500) } catch (_: InterruptedException) {}
                 }
             }
@@ -266,9 +270,10 @@ class EnterpriseWorkflowEngine(
                 val actualValue = packet.data[key]?.toString() ?: ""
                 return actualValue == expectedValue
             }
-        } catch (_: Exception) { return false } // 🟢 FIXED: Used '_' for unused exception variable
+        } catch (_: Exception) { return false }
         return true
     }
+
     private fun runCartridge(rule: MatrixRule, packet: ExchangePacket, context: KernelContext) {
         val cartridge = cartridgeMap[rule.cartridgeId]
         val stepCode = "[${rule.moduleId}-${rule.slotId}]"
@@ -277,14 +282,12 @@ class EnterpriseWorkflowEngine(
             try {
                 context.set("STEP_PREFIX", stepCode)
 
-                // 🟢 1. Clean up the CSV formatting artifacts
                 val cleanJson = rule.configJson.trim()
                     .removeSurrounding("\"")
                     .removeSurrounding("'")
                     .replace("\"\"", "\"")
                     .trim()
 
-                // 🟢 2. THE ULTIMATE FIX: Only parse if it actually contains a key-value pair (a colon)!
                 if (cleanJson.contains(":")) {
                     try {
                         val configMap = objectMapper.readValue(cleanJson, Map::class.java)
@@ -297,6 +300,8 @@ class EnterpriseWorkflowEngine(
                 cartridge.execute(packet, context)
                 logToDb(packet.id, rule, stepCode, WorkflowStatus.CLEARED, "Executed")
 
+            } catch (e: WorkflowSuspendedException) {
+                throw e
             } catch (e: Exception) {
                 if (rule.strategy != "RETRY") println(EngineAnsi.RED + "      💥 Error in ${rule.cartridgeId}: ${e.message}" + EngineAnsi.RESET)
                 logToDb(packet.id, rule, stepCode, WorkflowStatus.FAILED, e.message ?: "Error")

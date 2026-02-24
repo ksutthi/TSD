@@ -33,8 +33,12 @@ class TsdApplication {
             }
         }
     }
-}
 
-fun main(args: Array<String>) {
-    runApplication<TsdApplication>(*args)
+    // 🟢 FIX: We moved the main function inside a companion object!
+    companion object {
+        @JvmStatic
+        fun main(args: Array<String>) {
+            runApplication<TsdApplication>(*args)
+        }
+    }
 }

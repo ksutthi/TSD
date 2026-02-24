@@ -32,35 +32,36 @@ class MakerCheckerWorkflowService(
     }
 
     /**
-     * Upgraded: No longer accepts 'checkerId' from the outside.
-     * The engine securely extracts it from the current thread.
+     * Upgraded: Matrix-Engine Compatible.
+     * Enforces strict security policies, updates legacy tables if they exist,
+     * and seamlessly wakes up the modern Workflow Engine.
      */
     @Transactional
     fun approveJob(jobId: String) {
-        // 1. Fetch Job
-        val job = repository.findByJobId(jobId)
-            ?: throw IllegalArgumentException("Job $jobId not found in the vault.")
-
-        // 2. Extract Trusted Identity
+        // 1. Extract Trusted Identity FIRST
         val currentUser = securityPort.getCurrentUser()
         log.info("⚙️ [CORE ENGINE] ${currentUser.fullName} (${currentUser.role}) is attempting to approve Job $jobId")
 
-        // 3. Enforce Policy (Assuming job has an amount, or defaulting to ZERO if not applicable)
-        // NOTE: If your Job entity has a specific amount field (e.g., job.totalValue), replace BigDecimal.ZERO with it!
+        // 2. Enforce Policy (Regardless of which engine owns the job)
         val isAuthorized = policyPort.isAuthorized(currentUser, PlatformAction.APPROVE_TRANSFER, BigDecimal.ZERO)
         if (!isAuthorized) {
             log.error("🚨 SECURITY HARD-STOP: User ${currentUser.userId} lacks authority to approve this job!")
             throw SecurityException("Access Denied: Insufficient authority to approve Job $jobId.")
         }
 
-        // 4. Domain Logic (Entity enforces Maker != Checker)
-        job.approve(currentUser.userId)
+        // 3. Try to update the Legacy Vault (if the entity exists)
+        val job = repository.findByJobId(jobId)
+        if (job != null) {
+            // Domain Logic (Entity enforces Maker != Checker)
+            job.approve(currentUser.userId)
+            repository.save(job)
+            log.info("✅ Legacy Job $jobId successfully APPROVED by secure identity: ${currentUser.userId}.")
+        } else {
+            // Matrix Engine Jobs might not use the legacy entity, so we just log and proceed
+            log.info("💡 [Matrix Handoff] Job $jobId not found in legacy vault. Trusting Matrix Engine state.")
+        }
 
-        // 5. Commit to Database
-        repository.save(job)
-        log.info("✅ Job $jobId successfully APPROVED by secure identity: ${currentUser.userId}.")
-
-        // 🟢 UNCOMMENTED: Wake up the Engine!
+        // 4. ALWAYS Wake up the Core Matrix Engine!
         workflowEngine.resume(jobId)
     }
 

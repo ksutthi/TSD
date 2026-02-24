@@ -9,20 +9,6 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 
-/**
- * The Input payload representing a raw, unstructured row from a Book Closing file
- * or the Registration_Queue.
- */
-data class IncomingHolderRecord(
-    val queueId: Int,
-    val firstName: String,
-    val lastName: String,
-    val taxId: String?,
-    val idType: String, // e.g., "CITIZEN_ID", "PASSPORT"
-    val idValue: String,
-    val country: String
-)
-
 @Component
 class IdentityResolutionCartridge(
     // 🟢 HEXAGONAL PORTS: The cartridge only speaks to pure Kotlin interfaces.
@@ -64,16 +50,13 @@ class IdentityResolutionCartridge(
     }
 
     private fun findByTaxAndName(taxId: String, firstName: String, lastName: String): Long? {
-        // Query the identity attributes via the outbound port
         val matchByTax = identityAttributePort.findGinIdByTypeAndValue("TAX_ID", taxId)
         val matchByName = identityAttributePort.findGinIdByTypeAndValue("FIRST_NAME", firstName)
 
-        // Only return if BOTH vectors point to the exact same human being
         return if (matchByTax != null && matchByTax == matchByName) matchByTax else null
     }
 
     private fun createNewGlobalInvestor(record: IncomingHolderRecord): Long {
-        // 1. Insert into Global_Investor_Registry
         val newRegistry = GlobalInvestorRegistry(
             ginCode = generateGinCode(),
             createdDate = LocalDateTime.now()
@@ -81,7 +64,6 @@ class IdentityResolutionCartridge(
         val savedRegistry = globalInvestorRegistryPort.save(newRegistry)
         val newGinId = savedRegistry.ginId ?: throw IllegalStateException("Failed to generate GIN_ID")
 
-        // 2. Insert the matching vectors into Identity_Attributes for future runs
         identityAttributePort.save(IdentityAttribute(globalInvestorId = newGinId, attributeType = "FIRST_NAME", attributeValue = record.firstName))
         identityAttributePort.save(IdentityAttribute(globalInvestorId = newGinId, attributeType = "LAST_NAME", attributeValue = record.lastName))
         identityAttributePort.save(IdentityAttribute(globalInvestorId = newGinId, attributeType = record.idType, attributeValue = record.idValue))
@@ -94,7 +76,6 @@ class IdentityResolutionCartridge(
     }
 
     private fun generateGinCode(): String {
-        // Generates the public-facing ID (e.g., "GID-827364")
         return "GID-${System.currentTimeMillis().toString().takeLast(6)}"
     }
 }
